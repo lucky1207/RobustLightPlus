@@ -1,0 +1,39 @@
+# 忽略模型文件夹
+model/
+
+# 忽略记录文件夹
+records/
+
+# 忽略 wandb 文件夹
+wandb/
+
+# 忽略所有 .out 文件
+*.out
+
+# Python 相关
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# IDE 相关
+.idea/
+.vscode/
+*.swp
+*.swo 

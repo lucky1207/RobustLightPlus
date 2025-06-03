@@ -64,8 +64,8 @@ def test(model_dir, cnt_round, run_cnt, _dic_traffic_env_conf):
     elif dic_traffic_env_conf['MODEL_NAME'] in ["EfficientMPLight", "AdvancedMPLight"]:
         long_state_con = torch.zeros([xs[1].shape[0], 4, agents[i].len_feature]).to(dic_traffic_env_conf['device'])
     psnr = PSNR(255.0).to(dic_traffic_env_conf['device'])  
-    a = np.zeros((int(total_time / dic_traffic_env_conf["MIN_ACTION_TIME"]), xs[0].shape[1], xs[0].shape[2]))
-    b = a.copy()
+    original_state = np.zeros((int(total_time / dic_traffic_env_conf["MIN_ACTION_TIME"]), xs[0].shape[1], xs[0].shape[2]))
+    diffusion_denoise_state = original_state.copy()
     cnt = 0
     while not done and step_num < int(total_time / dic_traffic_env_conf["MIN_ACTION_TIME"]):
         action_list = []
@@ -87,7 +87,7 @@ def test(model_dir, cnt_round, run_cnt, _dic_traffic_env_conf):
         print(f"TSC time: {elapsed_time_ms:.2f} ms") 
         next_state, reward, done, _ = env.step(action_list)
         
-        a[cnt,:,:] = agents[i].convert_state_to_input(next_state)[0]
+        original_state[cnt,:,:] = agents[i].convert_state_to_input(next_state)[0]
         # TODO: 做一些mask（1）对每个交叉口某些维度做mask （2）对交叉口加噪声 (3) 对某些交叉口做mask
         if dic_traffic_env_conf['NOISE_LEVEL'] == 0 and dic_traffic_env_conf['NOISE_TYPE'] != 2 and dic_traffic_env_conf['NOISE_TYPE'] != 3:
             if dic_traffic_env_conf['NOISE_TYPE'] == 0:
@@ -282,14 +282,14 @@ def test(model_dir, cnt_round, run_cnt, _dic_traffic_env_conf):
                         
                 t += 1
                 
-        b[cnt,:,:] = xs[0]
+        diffusion_denoise_state[cnt,:,:] = xs[0]
         state = next_state
         step_num += 1
-    a, b = torch.tensor(a).to(dic_traffic_env_conf['device']),torch.tensor(b).to(dic_traffic_env_conf['device'])
+    original_state, diffusion_denoise_state = torch.tensor(original_state).to(dic_traffic_env_conf['device']),torch.tensor(diffusion_denoise_state).to(dic_traffic_env_conf['device'])
         
-    psnr_value = psnr(postprocess(a), \
-                        postprocess(b))
-    mae = (torch.sum(torch.abs(a - b)) / torch.sum(a)).float()
+    psnr_value = psnr(postprocess(original_state), \
+                        postprocess(diffusion_denoise_state))
+    mae = (torch.sum(torch.abs(original_state - diffusion_denoise_state)) / torch.sum(original_state)).float()
     print(f'psnr {psnr_value.item()}')
     print(f'mae {mae}')
     env.batch_log_2()

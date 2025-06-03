@@ -245,7 +245,7 @@ class Intersection:
         dic_feature["pressure"] = self._get_pressure()
         dic_feature["adjacency_matrix"] = self._get_adjacency_row()
 
-        
+        dic_feature["lane_num_waiting_vehicle_in"] = [t/20 for t in dic_feature["lane_num_waiting_vehicle_in"]]
         
 
         self.dic_feature = dic_feature

@@ -151,7 +151,7 @@ DMBP_config = {
     "attn_hidden_dim": 128,
     "attn_embed_dim": 64,
 
-    "lr": 3e-4,
+    "lr": 3e-7,
     "alpha": 0.2,
     "batch_size": 64,
     "hidden_size": 256,

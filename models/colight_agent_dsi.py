@@ -40,6 +40,7 @@ class CoLightDSIAgent(Agent):
         self.inference_model = Diffusion_Predictor(self.len_feature, self.num_actions, self.device, dic_traffic_env_conf['inference_config'], log_writer=False)
         #self.inference_model = H_I_N_T()
         self.timestep = None
+        self.cnt_round = cnt_round
         self.long_state_con = torch.zeros([self.num_agents, 4, self.len_feature]).to(self.dic_traffic_env_conf['device'])
         if cnt_round == 0:
             # initialization

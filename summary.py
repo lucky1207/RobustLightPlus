@@ -175,6 +175,6 @@ if __name__ == "__main__":
     }
 
 
-    memo = "transfer"
+    memo = "colightDSI_old"
     summary_detail_RL(memo, copy.deepcopy(total_summary))
     #summary_detail_conventional(memo)
