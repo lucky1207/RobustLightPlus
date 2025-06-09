@@ -75,13 +75,14 @@ Losses = {
 class Diffusion(nn.Module):
     def __init__(self, state_dim, action_dim, model,
                  beta_schedule='vp', beta_mode='all', n_timesteps=20,
-                 loss_type='l2', clip_denoised=True, predict_epsilon=True):
+                 loss_type='l2', clip_denoised=True, predict_epsilon=True, eta=0.0):
         super(Diffusion, self).__init__()
 
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.model = model
 
+        self.eta = eta 
         if beta_schedule == 'linear':
             betas = linear_beta_schedule(n_timesteps)
         elif beta_schedule == 'cosine':
@@ -109,66 +110,19 @@ class Diffusion(nn.Module):
         self.register_buffer('alphas_cumprod', alphas_cumprod)
         self.register_buffer('alphas_cumprod_prev', alphas_cumprod_prev)
 
-        # calculations for diffusion q(x_t | x_{t-1}) and others, \sqrt{\hat{\alpha}_t}
-        self.register_buffer('sqrt_alphas_cumprod', torch.sqrt(alphas_cumprod))
-        self.register_buffer('sqrt_one_minus_alphas_cumprod', torch.sqrt(1. - alphas_cumprod))
-        self.register_buffer('log_one_minus_alphas_cumprod', torch.log(1. - alphas_cumprod))
-        self.register_buffer('sqrt_recip_alphas_cumprod', torch.sqrt(1. / alphas_cumprod))
-        self.register_buffer('sqrt_recipm1_alphas_cumprod', torch.sqrt(1. / alphas_cumprod - 1))
-
-        # calculations for posterior q(x_{t-1} | x_t, x_0), 方差
-        posterior_variance = betas * (1. - alphas_cumprod_prev) / (1. - alphas_cumprod)
-        self.register_buffer('posterior_variance', posterior_variance)
-
-        ## log calculation clipped because the posterior variance
-        ## is 0 at the beginning of the diffusion chain
-        self.register_buffer('posterior_log_variance_clipped',
-                             torch.log(torch.clamp(posterior_variance, min=1e-20)))
-        self.register_buffer('posterior_mean_coef1',
-                             betas * np.sqrt(alphas_cumprod_prev) / (1. - alphas_cumprod))
-        self.register_buffer('posterior_mean_coef2',
-                             (1. - alphas_cumprod_prev) * np.sqrt(alphas) / (1. - alphas_cumprod))
-
         self.loss_fn = Losses[loss_type]()
-
-    def predict_start_from_noise(self, x_t, t, noise):
-        '''
-            if self.predict_epsilon, model output is (scaled) noise;
-            otherwise, model predicts x0 directly
-        '''
-        if self.predict_epsilon:
-            return (
-                    extract(self.sqrt_recip_alphas_cumprod, t, x_t.shape) * x_t -
-                    extract(self.sqrt_recipm1_alphas_cumprod, t, x_t.shape) * noise
-            )
-        else:
-            return noise
-
-    def q_posterior(self, next_obs_recon, next_obs, timestep):
-        posterior_mean = (
-                extract(self.posterior_mean_coef1, timestep, next_obs.shape) * next_obs_recon +
-                extract(self.posterior_mean_coef2, timestep, next_obs.shape) * next_obs
-        )
-        posterior_variance = extract(self.posterior_variance, timestep, next_obs.shape)
-        posterior_log_variance_clipped = extract(self.posterior_log_variance_clipped, timestep, next_obs.shape)
-        return posterior_mean, posterior_variance, posterior_log_variance_clipped
-    #  x_{t-1} = 1/sqrt(alpha_t) * ( x_t - {(1-alpha_t)/sqrt(1 - alpha_cumprod_t)} * sigma)
-    def p_mean_variance(self, next_obs, timesteps, action, state):
-        next_obs_recon = self.predict_start_from_noise(next_obs, t=timesteps,
-                                                       noise=self.model(next_obs, timesteps, action, state))
-        model_mean, posterior_variance, posterior_log_variance = self.q_posterior(next_obs_recon, next_obs, timesteps)
-        return model_mean, posterior_variance, posterior_log_variance
 
     # @torch.no_grad()
     def p_sample(self, next_obs, timesteps, action, state):
         b, *_, device = *next_obs.shape, next_obs.device
-        model_mean, _, model_log_variance = self.p_mean_variance(next_obs, timesteps, action, state)
+        alpha_bar_t = extract(self.alphas_cumprod, timesteps, next_obs.shape)
+        alpha_bar_t_prev = extract(self.alphas_cumprod_prev, timesteps, next_obs.shape)
+        beta_t = extract(self.betas, timesteps, next_obs.shape)
+        sigma = self.eta * (1 - alpha_bar_t_prev) / (1 - alpha_bar_t) * beta_t
+        model_t = self.model(next_obs, timesteps, action, state)
         noise = torch.randn_like(next_obs)
-        # no noise when t == 0
-        nonzero_mask = (1 - (timesteps == 0).float()).reshape(b, *((1,) * (len(next_obs.shape) - 1)))
-
-        return model_mean + nonzero_mask * (0.5 * model_log_variance).exp() * noise
-        # return model_mean
+        val = torch.sqrt(alpha_bar_t_prev/ alpha_bar_t) * next_obs - torch.sqrt(alpha_bar_t_prev * (1 - alpha_bar_t) / alpha_bar_t) * model_t + sigma * noise
+        return val
 
     # @torch.no_grad()
     def p_sample_loop(self, noised_next_state, action, state, tstp, shape, return_diffusion=False):
@@ -209,7 +163,6 @@ class Diffusion(nn.Module):
                 extract(self.sqrt_alphas_cumprod, t, next_state.shape) * next_state +
                 extract(self.sqrt_one_minus_alphas_cumprod, t, next_state.shape) * noise
         )
-
         return sample
 
     # TODO: Check if this is correct

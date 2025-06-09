@@ -228,7 +228,7 @@ class Intersection:
                                                  for i in range(12)]
         dic_feature["lane_num_waiting_vehicle_in"] = self._get_lane_queue_length(self.list_entering_lanes)
         dic_feature["lane_num_waiting_vehicle_out"] = self._get_lane_queue_length(self.list_exiting_lanes)
-
+   
         dic_feature["traffic_movement_pressure_queue"] = self._get_traffic_movement_pressure_general(
             dic_feature["lane_num_waiting_vehicle_in"], dic_feature["lane_num_waiting_vehicle_out"])
 
@@ -246,7 +246,7 @@ class Intersection:
         dic_feature["adjacency_matrix"] = self._get_adjacency_row()
 
         dic_feature["lane_num_waiting_vehicle_in"] = [t/20 for t in dic_feature["lane_num_waiting_vehicle_in"]]
-        
+        dic_feature["traffic_movement_pressure_queue_efficient"] = [t/20 for t in dic_feature["traffic_movement_pressure_queue_efficient"]]
 
         self.dic_feature = dic_feature
 

@@ -17,8 +17,8 @@ import itertools
 import einops
 from einops.layers.torch import Rearrange
 
-from .diffusion import Diffusion
-
+#from .diffusion import Diffusion
+from .ddim import Diffusion 
 
 LOG_SIG_MAX = 2
 LOG_SIG_MIN = -20
