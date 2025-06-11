@@ -17,7 +17,6 @@ random.seed(seed)
 
 os.environ["WANDB_DISABLED"] = "true"
 
-
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-memo",       type=str,           default='colightDSI_old')
@@ -61,7 +60,7 @@ def main(in_args=None):
     setup_seed()
     NUM_COL = int(road_net.split('_')[1])
     NUM_ROW = int(road_net.split('_')[0])
-    log_writer = True
+    log_writer = False
     if log_writer:
         wandb.login(key="fa5f1ee35a61f8dca85188f5288f90305549dbea")
         wandb.init(project='REAL_TIME_MISSING', name="REAL_TIME_MISSING")

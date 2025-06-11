@@ -240,11 +240,12 @@ class Intersection:
 
         tmp_part_n, tmp_part_q, tmp_efficient_part, enter_running_part, lepq = self._get_part_traffic_movement_features()
 
-        dic_feature["lane_enter_running_part"] = list(enter_running_part/20)
+        
 
         dic_feature["pressure"] = self._get_pressure()
         dic_feature["adjacency_matrix"] = self._get_adjacency_row()
-
+        
+        dic_feature["lane_enter_running_part"] = list(enter_running_part/20)
         dic_feature["lane_num_waiting_vehicle_in"] = [t/20 for t in dic_feature["lane_num_waiting_vehicle_in"]]
         dic_feature["traffic_movement_pressure_queue_efficient"] = [t/20 for t in dic_feature["traffic_movement_pressure_queue_efficient"]]
 

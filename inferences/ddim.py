@@ -28,16 +28,14 @@ def vp_beta_schedule(timesteps, dtype=torch.float32):
     return torch.tensor(betas, dtype=dtype)
 
 def self_defined_beta_schedule(timesteps, dtype=torch.float32):
-    if timesteps != 100:
-        raise NotImplementedError("Self-Defined beta function only supports T=100")
+
     t = np.arange(1, timesteps + 1)
     a, b, c = 2.1109, 25.06, -2.5446
     betas = np.exp(-b/(t+a)+c)
     return torch.tensor(betas, dtype=dtype)
 
 def self_defined_beta_schedule2(timesteps, dtype=torch.float32):
-    if timesteps != 100:
-        raise NotImplementedError("Self-Defined beta function only supports T=100")
+
     t = np.arange(1, timesteps + 1)
     a, b, c = 3.0651, 24.552, -3.1702
     betas = np.exp(-b/(t+a)+c)
@@ -103,13 +101,20 @@ class Diffusion(nn.Module):
         alphas_cumprod_prev = torch.cat([torch.ones(1), alphas_cumprod[:-1]])
 
         self.n_timesteps = int(n_timesteps)
+        self.ddim_timesteps = 10
+        self.c = self.n_timesteps // self.ddim_timesteps
         self.clip_denoised = clip_denoised
         self.predict_epsilon = predict_epsilon
+
+        self.ddim_timesteps_list = torch.tensor(list(range(0, self.n_timesteps, self.c))) + 1 
         # beta, \hat{\alpha}_t , \hat{\alpha}_{t-1}
         self.register_buffer('betas', betas)
         self.register_buffer('alphas_cumprod', alphas_cumprod)
         self.register_buffer('alphas_cumprod_prev', alphas_cumprod_prev)
-
+        self.register_buffer('sqrt_alphas_cumprod', torch.sqrt(alphas_cumprod))
+        self.register_buffer('sqrt_one_minus_alphas_cumprod', torch.sqrt(1. - alphas_cumprod))
+        self.register_buffer('sqrt_recip_alphas_cumprod', torch.sqrt(1. / alphas_cumprod))
+        self.register_buffer('sqrt_recipm1_alphas_cumprod', torch.sqrt(1. / alphas_cumprod - 1))
         self.loss_fn = Losses[loss_type]()
 
     # @torch.no_grad()
@@ -130,8 +135,9 @@ class Diffusion(nn.Module):
 
         batch_size = shape[0]
         x = noised_next_state
-        for i in reversed(range(0, tstp)):
-            timesteps = torch.full((batch_size,), i, device=device, dtype=torch.long)
+
+        for i in reversed(range(0, self.ddim_timesteps)):
+            timesteps = torch.full((batch_size,), self.ddim_timesteps_list[i], device=device, dtype=torch.long)
             x = self.p_sample(x, timesteps, action, state)
             x = torch.clamp(x, min=-1, max=1)
         return x
@@ -174,6 +180,19 @@ class Diffusion(nn.Module):
                 torch.sqrt(extract(self.betas, t, next_state.shape)) * noise
         )
         return sample  # x_(t+1) = sqrt(alpha_t) * x_(t) + sqrt(beta_t) * \epsilon
+
+    def predict_start_from_noise(self, x_t, t, noise):
+        '''
+            if self.predict_epsilon, model output is (scaled) noise;
+            otherwise, model predicts x0 directly
+        '''
+        if self.predict_epsilon:
+            return (
+                    extract(self.sqrt_recip_alphas_cumprod, t, x_t.shape) * x_t -
+                    extract(self.sqrt_recipm1_alphas_cumprod, t, x_t.shape) * noise
+            )
+        else:
+            return noise
 
     def p_losses(self, next_state, action, state_condition, mask, t, weights=1.0):
         noise = torch.randn_like(next_state)

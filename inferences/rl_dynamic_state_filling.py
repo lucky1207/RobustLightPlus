@@ -17,9 +17,6 @@ import itertools
 import einops
 from einops.layers.torch import Rearrange
 
-#from .diffusion import Diffusion
-from .ddim import Diffusion 
-
 LOG_SIG_MAX = 2
 LOG_SIG_MIN = -20
 epsilon = 1e-6
@@ -566,12 +563,16 @@ class Diffusion_Predictor(object):
 
         self.model = TemporalUnet(state_dim=state_dim, action_dim=action_dim, device=device,
                                   cond_dim=config['condition_length'], embed_dim=config['embed_dim']).to(device)
+        if config['diff_type'] == 'ddim':
+            from .ddim import Diffusion
+        else:
+            from .diffusion import Diffusion
 
         self.predictor = Diffusion(state_dim=state_dim, action_dim=action_dim, model=self.model,
                                    beta_schedule=config['beta_schedule'], beta_mode=config["beta_training_mode"],
                                    n_timesteps=config['T'], predict_epsilon=config['predict_epsilon']).to(device)
 
-        self.predictor_optimizer = torch.optim.Adam(self.predictor.parameters(), lr=config['lr'])
+        self.predictor_optimizer = torch.optim.Adam(self.predictor.parameters(), lr=config['actor_lr'])
 
         self.action_gradient_steps = 20
 
@@ -590,7 +591,7 @@ class Diffusion_Predictor(object):
 
         self.critic = Critic(state_dim, action_dim, config, device).to(device)
         self.critic_target = copy.deepcopy(self.critic)
-        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=config['lr'], eps=1e-5)
+        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=config['critic_lr'], eps=1e-5)
 
 
         self.update_ema_every = config['update_ema_every']
@@ -618,7 +619,7 @@ class Diffusion_Predictor(object):
             return
         self.ema.update_model_average(self.ema_model, self.predictor)
 
-    def action_gradient(self, replay_buffer,t_critic):
+    def action_gradient(self, replay_buffer, t_critic):
         s, a, ns, r, idxs, traj_idxs= replay_buffer.sample_batch()
         pre_state_condition = s[:, 0:self.condition_step]
         next_state = s[:, self.condition_step]
@@ -637,6 +638,7 @@ class Diffusion_Predictor(object):
                 nn.utils.clip_grad_norm_([best_actions], max_norm=self.action_grad_norm, norm_type=2)
             actions_optim.step()
             best_actions.requires_grad_(False)
+            best_actions.clamp_(-1., 1.)
 
         best_actions = best_actions.detach()
 
@@ -722,8 +724,15 @@ class Diffusion_Predictor(object):
                 wandb.log({"Predictor_Loss/Total_actor_Loss": pred_loss.item()}, step=self.step)
                 for loss_num in range(len(pred_loss_list)):
                     wandb.log({f"Predictor_Loss/Step{loss_num}_loss": pred_loss_list[loss_num]}, step=self.step)
-
+                    print(f"Predictor_Loss/Step{loss_num}_loss: {pred_loss_list[loss_num]}")
                 wandb.log({"Predictor_Loss/Total_critic_Loss": critic_loss.item()}, step=self.step)
+                print(f"Predictor_Loss/Total_critic_Loss: {critic_loss.item()}")
+
+         
+               
+            for loss_num in range(len(pred_loss_list)):
+                print(f"Predictor_Loss/Step{loss_num}_loss: {pred_loss_list[loss_num]}")
+            print(f"Predictor_Loss/Total_critic_Loss: {critic_loss.item()}")
 
             self.step += 1
             metric['pred_loss'].append(pred_loss.item())
