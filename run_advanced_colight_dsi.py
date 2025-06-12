@@ -15,7 +15,10 @@ torch.cuda.manual_seed(seed)
 np.random.seed(seed)
 random.seed(seed)
 
+
+
 os.environ["WANDB_DISABLED"] = "true"
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # 只使用第0块GPU
 
 def parse_args():
     parser = argparse.ArgumentParser()

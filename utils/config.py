@@ -91,7 +91,7 @@ DIC_BASE_AGENT_CONF = {
     "UPDATE_Q_BAR_EVERY_C_ROUND": False,
 
     "GAMMA": 0.8,
-    "NORMAL_FACTOR": 1,
+    "NORMAL_FACTOR": 20,
 
     "EPSILON": 0.8,
     "EPSILON_DECAY": 0.95,
