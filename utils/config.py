@@ -91,7 +91,7 @@ DIC_BASE_AGENT_CONF = {
     "UPDATE_Q_BAR_EVERY_C_ROUND": False,
 
     "GAMMA": 0.8,
-    "NORMAL_FACTOR": 20,
+    "NORMAL_FACTOR": 1,
 
     "EPSILON": 0.8,
     "EPSILON_DECAY": 0.95,
@@ -120,8 +120,8 @@ DMBP_config = {
     "step_start_ema": 1000,
     "ema_decay": 0.995,
     "update_ema_every": 5,
-    "T": 100,  # 10 for ddim
-    "diff_type": 'ddim',    
+    "T": 100,  
+    "diff_type": 'ddpm',    
     "beta_schedule": 'self-defined2',
     "beta_training_mode": 'all',   # 'all' or 'partial'
    
