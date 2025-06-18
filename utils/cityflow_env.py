@@ -9,23 +9,6 @@ import time
 from multiprocessing import Process
 from .make_mask_noise import *
 
-# max_run = -1000
-# max_wait = -1000
-# max_pressure = -1000
-
-# min_run = 1000
-# min_wait = 1000
-# min_pressure = 1000
-
-
-max_run = 30
-max_wait = 100
-max_pressure = 5
-
-min_run = 0
-min_wait = 0
-min_pressure = -1
-
 class Intersection:
     def __init__(self, inter_id, dic_traffic_env_conf, eng, light_id_dict, path_to_log, lanes_length_dict):
         self.inter_id = inter_id
@@ -34,7 +17,7 @@ class Intersection:
         self.dic_traffic_env_conf = dic_traffic_env_conf
         self.lane_length = lanes_length_dict
         self.obs_length = dic_traffic_env_conf["OBS_LENGTH"]
-       
+
         self.list_approachs = ["W", "E", "N", "S"]
         # corresponding exiting lane for entering lanes
         self.dic_approach_to_node = {"W": 0, "E": 2, "S": 1, "N": 3}
@@ -245,7 +228,7 @@ class Intersection:
                                                  for i in range(12)]
         dic_feature["lane_num_waiting_vehicle_in"] = self._get_lane_queue_length(self.list_entering_lanes)
         dic_feature["lane_num_waiting_vehicle_out"] = self._get_lane_queue_length(self.list_exiting_lanes)
-   
+
         dic_feature["traffic_movement_pressure_queue"] = self._get_traffic_movement_pressure_general(
             dic_feature["lane_num_waiting_vehicle_in"], dic_feature["lane_num_waiting_vehicle_out"])
 
@@ -257,24 +240,13 @@ class Intersection:
 
         tmp_part_n, tmp_part_q, tmp_efficient_part, enter_running_part, lepq = self._get_part_traffic_movement_features()
 
-        
+        dic_feature["lane_enter_running_part"] = list(enter_running_part)
 
         dic_feature["pressure"] = self._get_pressure()
         dic_feature["adjacency_matrix"] = self._get_adjacency_row()
+
         
-        # 计算最大最小归一化
-        def min_max_normalize(x, min_val=0, max_val=100):
-            return (x - min_val) / (max_val - min_val + 1e-6)
-        global max_run, max_wait, max_pressure, min_run, min_wait, min_pressure
-        # max_run = max(max_run, np.max(enter_running_part))
-        # max_wait = max(max_wait, np.max(dic_feature["lane_num_waiting_vehicle_in"]))
-        # max_pressure = max(max_pressure, np.max(dic_feature["traffic_movement_pressure_queue_efficient"]))
-        # min_run = min(min_run, np.min(enter_running_part))
-        # min_wait = min(min_wait, np.min(dic_feature["lane_num_waiting_vehicle_in"]))
-        # min_pressure = min(min_pressure, np.min(dic_feature["traffic_movement_pressure_queue_efficient"]))
-        dic_feature["lane_enter_running_part"] = list(min_max_normalize(enter_running_part, 0, max_run))
-        dic_feature["lane_num_waiting_vehicle_in"] = [min_max_normalize(t, 0, max_wait) for t in dic_feature["lane_num_waiting_vehicle_in"]]
-        dic_feature["traffic_movement_pressure_queue_efficient"] = [min_max_normalize(t, min_pressure, max_pressure) for t in dic_feature["traffic_movement_pressure_queue_efficient"]]
+        
 
         self.dic_feature = dic_feature
 
@@ -318,7 +290,7 @@ class Intersection:
         for approach in list_approachs:
             outs_maps[approach] = sum([exitings[i] for i in index_maps[approach]])
         turn_maps = ["S", "W", "N", "N", "E", "S", "W", "N", "E", "E", "S", "W"]
-        t_m_p = [enterings[j]/20 - outs_maps[turn_maps[j]]/(3*20) for j in range(12)]
+        t_m_p = [enterings[j] - outs_maps[turn_maps[j]]/3 for j in range(12)]
         return t_m_p
 
     def _get_part_traffic_movement_features(self):

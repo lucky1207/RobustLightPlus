@@ -18,7 +18,6 @@ from tensorflow.keras.callbacks import EarlyStopping
 from utils.make_mask_noise import make_guassion_noise, make_U_rand_noise
 from inferences.rl_dynamic_state_filling import Diffusion_Predictor
 from utils.batch_buffer import ReplayBuffer
-
 import torch
 def build_memory():
     return []
@@ -38,9 +37,8 @@ class CoLightDSIAgent(Agent):
         self.memory = build_memory()
         self.device = dic_traffic_env_conf['device']
         self.inference_model = Diffusion_Predictor(self.len_feature, self.num_actions, self.device, dic_traffic_env_conf['inference_config'], log_writer=False)
-        #self.inference_model = H_I_N_T()
+     
         self.timestep = None
-        self.cnt_round = cnt_round
         self.long_state_con = torch.zeros([self.num_agents, 4, self.len_feature]).to(self.dic_traffic_env_conf['device'])
         if cnt_round == 0:
             # initialization

@@ -563,16 +563,16 @@ class Diffusion_Predictor(object):
 
         self.model = TemporalUnet(state_dim=state_dim, action_dim=action_dim, device=device,
                                   cond_dim=config['condition_length'], embed_dim=config['embed_dim']).to(device)
-        if config['diff_type'] == 'ddim':
-            from .ddim import Diffusion
-        else:
+        if config['type'] == 'ddpm':
             from .diffusion import Diffusion
+        elif config['type'] == 'ddim':
+            from .ddim import Diffusion
 
         self.predictor = Diffusion(state_dim=state_dim, action_dim=action_dim, model=self.model,
-                                   beta_schedule=config['beta_schedule'], beta_mode=config["beta_training_mode"],
-                                   n_timesteps=config['T'], predict_epsilon=config['predict_epsilon']).to(device)
-
-        self.predictor_optimizer = torch.optim.Adam(self.predictor.parameters(), lr=config['actor_lr'])
+                                beta_schedule=config['beta_schedule'], beta_mode=config["beta_training_mode"],
+                                n_timesteps=config['T'], predict_epsilon=config['predict_epsilon']).to(device)
+    
+        self.predictor_optimizer = torch.optim.Adam(self.predictor.parameters(), lr=config['lr'])
 
         self.action_gradient_steps = 20
 
@@ -591,7 +591,7 @@ class Diffusion_Predictor(object):
 
         self.critic = Critic(state_dim, action_dim, config, device).to(device)
         self.critic_target = copy.deepcopy(self.critic)
-        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=config['critic_lr'], eps=1e-5)
+        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=config['lr'], eps=1e-5)
 
 
         self.update_ema_every = config['update_ema_every']
@@ -619,7 +619,7 @@ class Diffusion_Predictor(object):
             return
         self.ema.update_model_average(self.ema_model, self.predictor)
 
-    def action_gradient(self, replay_buffer, t_critic):
+    def action_gradient(self, replay_buffer,t_critic):
         s, a, ns, r, idxs, traj_idxs= replay_buffer.sample_batch()
         pre_state_condition = s[:, 0:self.condition_step]
         next_state = s[:, self.condition_step]
@@ -638,13 +638,20 @@ class Diffusion_Predictor(object):
                 nn.utils.clip_grad_norm_([best_actions], max_norm=self.action_grad_norm, norm_type=2)
             actions_optim.step()
             best_actions.requires_grad_(False)
-            best_actions.clamp_(-1., 1.)
+            #best_actions.clamp(-1, 1)
 
         best_actions = best_actions.detach()
 
         replay_buffer.replace(idxs, traj_idxs+self.condition_step, best_actions.cpu().numpy())
         return best_actions, action, pre_state_condition
 
+    def min_max_norm(self, value, min_v=0, max_v=100):
+        value = (value - min_v) / (max_v - min_v + 1e-8)
+        return value
+
+    def reverse_min_max_norm(self, value, min_v=0, max_v=100):
+        value = value * (max_v - min_v + 1e-8) + min_v
+        return value
 
     def train(self, replay_buffer, iterations, batch_size, log_writer=False):
         
@@ -661,6 +668,12 @@ class Diffusion_Predictor(object):
 
             s, a, ns, r, idxs,_= replay_buffer.sample_batch()
 
+            # s[:,:,8:20] = self.min_max_norm(s[:,:,8:20], -1, 5)
+            # s[:,:,20:] = self.min_max_norm(s[:,:,20:], 0, 30)
+            # r = self.min_max_norm(r, -100, 0)
+            # ns[:,:,8:20] = self.min_max_norm(ns[:,:,8:20], -1, 5)
+            # ns[:,:,20:] = self.min_max_norm(ns[:,:,20:], 0, 30)
+            
 
             pre_state_condition = s[:, 0:self.condition_step]
             next_state = s[:, self.condition_step]
@@ -724,15 +737,8 @@ class Diffusion_Predictor(object):
                 wandb.log({"Predictor_Loss/Total_actor_Loss": pred_loss.item()}, step=self.step)
                 for loss_num in range(len(pred_loss_list)):
                     wandb.log({f"Predictor_Loss/Step{loss_num}_loss": pred_loss_list[loss_num]}, step=self.step)
-                    print(f"Predictor_Loss/Step{loss_num}_loss: {pred_loss_list[loss_num]}")
-                wandb.log({"Predictor_Loss/Total_critic_Loss": critic_loss.item()}, step=self.step)
-                print(f"Predictor_Loss/Total_critic_Loss: {critic_loss.item()}")
 
-         
-               
-            for loss_num in range(len(pred_loss_list)):
-                print(f"Predictor_Loss/Step{loss_num}_loss: {pred_loss_list[loss_num]}")
-            print(f"Predictor_Loss/Total_critic_Loss: {critic_loss.item()}")
+                wandb.log({"Predictor_Loss/Total_critic_Loss": critic_loss.item()}, step=self.step)
 
             self.step += 1
             metric['pred_loss'].append(pred_loss.item())
@@ -751,6 +757,11 @@ class Diffusion_Predictor(object):
         # current_action = current_action[:2,:]
         # condition_states = condition_states[:2,:,:]
         
+        # noise_next_state[:,8:20] = self.min_max_norm(noise_next_state[:,8:20], -1,5)
+        # noise_next_state[:,20:] = self.min_max_norm(noise_next_state[:,20:], 0, 30)
+
+
+
         input_dim = noise_next_state.shape[0]
         if input_dim == 1:
             current_action_rpt = torch.repeat_interleave(current_action, repeats=50, dim=0)
@@ -774,7 +785,7 @@ class Diffusion_Predictor(object):
             elapsed_time_ms = (end_time - start_time) * 1000
 
             print(f"Inference time: {elapsed_time_ms:.2f} ms") 
-            return final_state
+         
 
         else:
             current_action_rpt = (torch.repeat_interleave(current_action.reshape(1, input_dim, -1), repeats=50, dim=0)
@@ -794,7 +805,10 @@ class Diffusion_Predictor(object):
             elapsed_time_ms = (end_time - start_time) * 1000
 
             print(f"Inference time: {elapsed_time_ms:.2f} ms") 
-            return final_state
+
+        # final_state[:,8:20] = self.reverse_min_max_norm(final_state[:,8:20], -1, 5)
+        # final_state[:,20:] = self.reverse_min_max_norm(final_state[:,20:], 0, 30)
+        return final_state
 
     def demask_state(self, masked_next_state, action, states, mask, reverse_step=2):
         start_time = time.time()
@@ -805,6 +819,10 @@ class Diffusion_Predictor(object):
         # states = states[:1,:,:]
         # mask = mask[:1,:]
         
+        # masked_next_state[:,8:20] = self.min_max_norm(masked_next_state[:,8:20], -1,5)
+        # masked_next_state[:,20:] = self.min_max_norm(masked_next_state[:,20:], 0, 30)
+
+
         input_dim = action.shape[0]
         masked_next_state = torch.repeat_interleave(masked_next_state.reshape(1, input_dim, -1), repeats=repeat, dim=0).reshape(50 * input_dim, -1)
         action = torch.repeat_interleave(action.reshape(1, input_dim, -1), repeats=repeat, dim=0).reshape(50 * input_dim, -1)
@@ -839,6 +857,10 @@ class Diffusion_Predictor(object):
         elapsed_time_ms = (end_time - start_time) * 1000
 
         print(f"Inference time: {elapsed_time_ms:.2f} ms") 
+
+        # masked_next_state[:,8:20] = self.reverse_min_max_norm(masked_next_state[:,8:20], -1,5)
+        # masked_next_state[:,20:] = self.reverse_min_max_norm(masked_next_state[:,20:], 0, 30)
+
         return demasked_state
 
     def save_model(self, file_name):
@@ -858,7 +880,7 @@ class Diffusion_Predictor(object):
     def load_model(self, file_name, device_idx=0):
         logger.info(f'Loading models from {file_name}')
         if file_name is not None:
-            checkpoint = torch.load(file_name, map_location=f'cuda:{device_idx}', weights_only=True)
+            checkpoint = torch.load(file_name, map_location=f'cuda:{device_idx}')
             self.predictor.load_state_dict(checkpoint['actor_state_dict'])
             self.ema_model.load_state_dict(checkpoint['ema_state_dict'])
             self.predictor_optimizer.load_state_dict(checkpoint['actor_optimizer_state_dict'])
@@ -868,6 +890,6 @@ class Diffusion_Predictor(object):
 
     def load_checkpoint(self, file_name, device_idx=0):
         if file_name is not None:
-            checkpoint = torch.load(file_name, map_location=f'cuda:{device_idx}', weights_only=True)
+            checkpoint = torch.load(file_name, map_location=f'cuda:{device_idx}')
             self.ema_model.load_state_dict(checkpoint['ema_state_dict'])
             self.predictor = copy.deepcopy(self.ema_model)

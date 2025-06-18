@@ -14,15 +14,9 @@ torch.manual_seed(seed)
 torch.cuda.manual_seed(seed)
 np.random.seed(seed)
 random.seed(seed)
-
-
-
-os.environ["WANDB_DISABLED"] = "true"
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # 只使用第0块GPU
-
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-memo",       type=str,           default='colightDSI_old')
+    parser.add_argument("-memo",       type=str,           default='transfer')
     parser.add_argument("-mod",        type=str,           default="ColightDSI")
     parser.add_argument("-eightphase",  action="store_true", default=False)
     parser.add_argument("-gen",        type=int,            default=1)
@@ -50,7 +44,7 @@ def main(in_args=None):
                        #"anon_3_4_jinan_real_2000.json",
                         #"anon_3_4_jinan_real_2500.json"
                              ]
-        num_rounds = 80
+        num_rounds = 1
         template = "Jinan"
     elif in_args.new_york:
         count = 3600
@@ -65,7 +59,6 @@ def main(in_args=None):
     NUM_ROW = int(road_net.split('_')[0])
     log_writer = False
     if log_writer:
-        wandb.login(key="fa5f1ee35a61f8dca85188f5288f90305549dbea")
         wandb.init(project='REAL_TIME_MISSING', name="REAL_TIME_MISSING")
     num_intersections = NUM_ROW * NUM_COL
     print('num_intersections:', num_intersections)
@@ -90,16 +83,16 @@ def main(in_args=None):
             
             "TRAFFIC_FILE": traffic_file,
             "ROADNET_FILE": "roadnet_{0}.json".format(road_net),
-            'is_test': False,
+            'is_test': True,
             "inference_epoch": 50,
-            'is_inference': False,
+            'is_inference': True,
             "sota_path": 'model/colightDSI_old/' + traffic_file[:-5],
             "NOISE_SCALE": 3.5,
             "DETECT_RATE": 2,
             "NOISE_TYPE": 0, # 每一个level有不同类型的noise，譬如level为0噪声类型有guassion，uniform，qmin，action_diff
             "NOISE_LEVEL": 0, # 0为state上面加噪声，1是mask， 2是 mask掉其他交叉口的
-            "device":"cuda:0",  
-            "index_maps": {
+            "device":"cuda:0",
+            "index_maps" : {
                 "W": [0, 1, 2],
                 "E": [3, 4, 5],
                 "N": [6, 7, 8],

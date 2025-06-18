@@ -111,6 +111,9 @@ DIC_MAXPRESSURE_AGENT_CONF = {
 DMBP_config = {
 
     "max_timestep": int(3e5),
+    "start_testing": int(0),
+    "checkpoint_start": int(2e5),
+    "checkpoint_every": int(1e4),
 
     "gamma": 0.99,
     "tau": 0.005,
@@ -120,13 +123,15 @@ DMBP_config = {
     "step_start_ema": 1000,
     "ema_decay": 0.995,
     "update_ema_every": 5,
-    "T": 100,  
-    "diff_type": 'ddpm',    
+    "T": 100,
+
+    "type": 'ddim', # 'ddpm' or 'ddim'
     "beta_schedule": 'self-defined2',
     "beta_training_mode": 'all',   # 'all' or 'partial'
-   
+    'loss_training_mode': 'no_act2',    # 'normal' or 'noise' or 'no_act' or 'no_act2'
     "predict_epsilon": True,
-
+    "data_usage": 1.0,
+    'ms': 'offline',
     'gn': 10.0,
 
     # Long Term Buffer Parameter Definition
@@ -136,10 +141,11 @@ DMBP_config = {
     "non_markovian_step": 6,
 
     # Attention Hyperparameters
- 
+    "attn_hidden_layer": 2,
+    "attn_hidden_dim": 128,
+    "attn_embed_dim": 64,
 
-    "actor_lr": 3e-3,
-    "critic_lr": 3e-5,
+    "lr": 3e-4,
     "alpha": 0.2,
     "batch_size": 64,
     "hidden_size": 256,

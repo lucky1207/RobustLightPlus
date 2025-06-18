@@ -9,7 +9,7 @@ wandb/
 
 # 忽略所有 .out 文件
 *.out
-
+summary/
 # Python 相关
 __pycache__/
 *.py[cod]

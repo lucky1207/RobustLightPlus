@@ -97,26 +97,25 @@ class Diffusion(nn.Module):
         self.beta_mode = beta_mode  # Train partial or all timesteps
 
         alphas = 1. - betas
-        # 
         alphas_cumprod = torch.cumprod(alphas, axis=0)
         alphas_cumprod_prev = torch.cat([torch.ones(1), alphas_cumprod[:-1]])
 
         self.n_timesteps = int(n_timesteps)
         self.clip_denoised = clip_denoised
         self.predict_epsilon = predict_epsilon
-        # beta, \hat{\alpha}_t , \hat{\alpha}_{t-1}
+
         self.register_buffer('betas', betas)
         self.register_buffer('alphas_cumprod', alphas_cumprod)
         self.register_buffer('alphas_cumprod_prev', alphas_cumprod_prev)
 
-        # calculations for diffusion q(x_t | x_{t-1}) and others, \sqrt{\hat{\alpha}_t}
+        # calculations for diffusion q(x_t | x_{t-1}) and others
         self.register_buffer('sqrt_alphas_cumprod', torch.sqrt(alphas_cumprod))
         self.register_buffer('sqrt_one_minus_alphas_cumprod', torch.sqrt(1. - alphas_cumprod))
         self.register_buffer('log_one_minus_alphas_cumprod', torch.log(1. - alphas_cumprod))
         self.register_buffer('sqrt_recip_alphas_cumprod', torch.sqrt(1. / alphas_cumprod))
         self.register_buffer('sqrt_recipm1_alphas_cumprod', torch.sqrt(1. / alphas_cumprod - 1))
 
-        # calculations for posterior q(x_{t-1} | x_t, x_0), 方差
+        # calculations for posterior q(x_{t-1} | x_t, x_0)
         posterior_variance = betas * (1. - alphas_cumprod_prev) / (1. - alphas_cumprod)
         self.register_buffer('posterior_variance', posterior_variance)
 
@@ -152,7 +151,7 @@ class Diffusion(nn.Module):
         posterior_variance = extract(self.posterior_variance, timestep, next_obs.shape)
         posterior_log_variance_clipped = extract(self.posterior_log_variance_clipped, timestep, next_obs.shape)
         return posterior_mean, posterior_variance, posterior_log_variance_clipped
-    #  x_{t-1} = 1/sqrt(alpha_t) * ( x_t - {(1-alpha_t)/sqrt(1 - alpha_cumprod_t)} * sigma)
+
     def p_mean_variance(self, next_obs, timesteps, action, state):
         next_obs_recon = self.predict_start_from_noise(next_obs, t=timesteps,
                                                        noise=self.model(next_obs, timesteps, action, state))
@@ -179,7 +178,7 @@ class Diffusion(nn.Module):
         for i in reversed(range(0, tstp)):
             timesteps = torch.full((batch_size,), i, device=device, dtype=torch.long)
             x = self.p_sample(x, timesteps, action, state)
-            x = torch.clamp(x, min=-1, max=1)
+            #x = x.clamp(-1, 1)
         return x
 
     # @torch.no_grad()
@@ -222,6 +221,11 @@ class Diffusion(nn.Module):
         )
         return sample  # x_(t+1) = sqrt(alpha_t) * x_(t) + sqrt(beta_t) * \epsilon
 
+    def q_inverse_sample(self, noised_next_state, t, noise_pred):
+        next_state_recon = (noised_next_state - extract(self.sqrt_one_minus_alphas_cumprod, t, noised_next_state.shape)
+                            * noise_pred)/extract(self.sqrt_alphas_cumprod, t, noised_next_state.shape)
+        return next_state_recon
+
     def p_losses(self, next_state, action, state_condition, mask, t, weights=1.0):
         noise = torch.randn_like(next_state)
         next_state_noisy = self.q_sample(next_state, t, noise)
@@ -249,6 +253,31 @@ class Diffusion(nn.Module):
                 raise NotImplementedError
 
         return self.p_losses(next_state, action, pres_state_condition, mask, t, weights)
+
+    # def act_q_loss(self, policy, next_state, action, state, weights=1.0, mode="normal"):
+    #     batch_size = len(action)
+    #     t = torch.randint(0, int(self.n_timesteps * 0.1), (batch_size,), device=policy.device).long()
+    #     noise = torch.randn_like(next_state)
+    #     next_state_noisy = self.q_sample(next_state, t, noise)
+    #     if mode == 'normal' or mode == 'no_act':
+    #         pred_noise = self.model(next_state_noisy, t, action, state)
+    #     elif mode == 'noise':
+    #         pred_noise = self.model(next_state_noisy, t, action, state + (0.01 * torch.rand_like(state) - 0.005))
+    #     else:
+    #         raise NotImplementedError("Check the Act_Loss Method")
+    #
+    #     next_state_recon = self.q_inverse_sample(next_state_noisy, t, pred_noise)
+    #     if mode == 'no_act':
+    #         act_on_real_next_state, q1 = policy.select_action(next_state, eval=True)
+    #         act_on_recon_next_state, q2 = policy.select_action(next_state_recon, eval=True)
+    #     else:
+    #         act_on_real_next_state, q1 = policy.select_action(next_state, eval=False)
+    #         act_on_recon_next_state, q2 = policy.select_action(next_state_recon, eval=False)
+    #     act_loss = self.loss_fn(act_on_real_next_state, act_on_recon_next_state, weights)
+    #     q_loss = self.loss_fn(q1, q2, weights)
+    #
+    #     return act_loss, q_loss
+
 
     # Core not finished
     def forward(self, noised_next_state, action, state, tstp, *args, **kwargs):

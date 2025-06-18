@@ -139,7 +139,7 @@ class Diffusion(nn.Module):
         for i in reversed(range(0, self.ddim_timesteps)):
             timesteps = torch.full((batch_size,), self.ddim_timesteps_list[i], device=device, dtype=torch.long)
             x = self.p_sample(x, timesteps, action, state)
-            x = torch.clamp(x, min=-1, max=1)
+            #x = torch.clamp(x, min=-1, max=1)
         return x
 
     # @torch.no_grad()
