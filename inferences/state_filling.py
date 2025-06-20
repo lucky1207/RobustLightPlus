@@ -17,8 +17,6 @@ import itertools
 import einops
 from einops.layers.torch import Rearrange
 
-from .diffusion import Diffusion
-
 
 LOG_SIG_MAX = 2
 LOG_SIG_MIN = -20
@@ -566,6 +564,10 @@ class Diffusion_Predictor(object):
 
         self.model = TemporalUnet(state_dim=state_dim, action_dim=action_dim, device=device,
                                   cond_dim=config['condition_length'], embed_dim=config['embed_dim']).to(device)
+        if config['type'] == 'ddpm':
+            from .diffusion import Diffusion
+        elif config['type'] == 'ddim':
+            from .ddim import Diffusion
 
         self.predictor = Diffusion(state_dim=state_dim, action_dim=action_dim, model=self.model,
                                    beta_schedule=config['beta_schedule'], beta_mode=config["beta_training_mode"],
@@ -629,6 +631,15 @@ class Diffusion_Predictor(object):
 
             s, a, ns, r, idxs,_= replay_buffer.sample_batch()
 
+            # s[:,:,:12] = self.min_max_norm(s[:,:,:12], -1, 5)
+            # s[:,:,12:] = self.min_max_norm(s[:,:,12:], 0, 30)
+            # r = self.min_max_norm(r, -100, 0)
+            # ns[:,:,:12] = self.min_max_norm(ns[:,:,:12], -1, 5)
+            # ns[:,:,12:] = self.min_max_norm(ns[:,:,12:], 0, 30)
+            
+
+
+
             pre_state_condition = s[:, 0:self.condition_step]
             next_state = s[:, self.condition_step].reshape(batch_size, -1)
             action = a[:, self.condition_step - 1].reshape(batch_size, -1)
@@ -679,12 +690,28 @@ class Diffusion_Predictor(object):
 
         return metric
 
+    def min_max_norm(self, value, min_v=0, max_v=100):
+        value = (value - min_v) / (max_v - min_v + 1e-8)
+        return value
+
+    def reverse_min_max_norm(self, value, min_v=0, max_v=100):
+        value = value * (max_v - min_v + 1e-8) + min_v
+        return value
 
     def denoise_state(self, noise_next_state, current_action, condition_states, timestep,
                       reward=None, method='mean', policy=None,
                       non_smooth=None):
         # Core: Method 1 is to Average 50 results
         input_dim = noise_next_state.shape[0]
+        noise_next_state = noise_next_state[:,8:]
+        condition_states = condition_states[:,:,8:]
+
+        # noise_next_state[:,:12] = self.min_max_norm(noise_next_state[:,:12], -1,5)
+        # noise_next_state[:,12:] = self.min_max_norm(noise_next_state[:,12:], 0, 30)
+        # condition_states[:,:,:12] = self.min_max_norm(condition_states[:,:,:12], -1,5)
+        # condition_states[:,:,12:] = self.min_max_norm(condition_states[:,:,12:], 0, 30)
+
+
         if input_dim == 1:
             current_action_rpt = torch.repeat_interleave(current_action, repeats=50, dim=0)
             condition_states_rpt = torch.repeat_interleave(condition_states, repeats=50, dim=0)
@@ -703,7 +730,6 @@ class Diffusion_Predictor(object):
                 final_state = np.mean(state_after_filter, axis=0)
             else:
                 raise NotImplementedError
-            return final_state
 
         else:
             current_action_rpt = (torch.repeat_interleave(current_action.reshape(1, input_dim, -1), repeats=50, dim=0)
@@ -718,22 +744,40 @@ class Diffusion_Predictor(object):
                 return_state = self.ema_model(noise_state_rpt, current_action_rpt, condition_states_rpt, timestep
                                               ).reshape(50, input_dim, -1)
             final_state = torch.mean(return_state, dim=0)
-            return final_state
+
+        # final_state[:,:12] = self.reverse_min_max_norm(final_state[:,:12], -1, 5)
+        # final_state[:,12:] = self.reverse_min_max_norm(final_state[:,12:], 0, 30)
+
+
+        batch_size = final_state.shape[0]
+        state_dim = final_state.shape[1]
+        tmp = torch.zeros((batch_size, 8 + state_dim), device=final_state.device, dtype=final_state.dtype)
+        tmp[:, 8:] = final_state
+        return tmp 
 
     def demask_state(self, masked_next_state, action, states, mask, reverse_step=2):
         repeat = 50
         input_dim = action.shape[0]
+        masked_next_state = masked_next_state[:,8:]
+        states = states[:,:,8:]
+        mask = mask[:,8:]
+
+
+        # states[:,:12] = self.min_max_norm(states[:,0:12], -1,5)
+        # states[:,12:] = self.min_max_norm(states[:,12:], 0,30)
+
         masked_next_state = torch.repeat_interleave(masked_next_state.reshape(1, input_dim, -1), repeats=repeat, dim=0).reshape(50 * input_dim, -1)
         action = torch.repeat_interleave(action.reshape(1, input_dim, -1), repeats=repeat, dim=0).reshape(50 * input_dim, -1)
         states = torch.repeat_interleave(states.reshape(1, input_dim, -1), repeats=repeat, dim=0).reshape(50 * input_dim, self.condition_step, -1)
         mask = torch.repeat_interleave(mask.reshape(1, input_dim, -1), repeats=repeat, dim=0).reshape(50 * input_dim, -1)
         mask_reverse = torch.ones_like(mask) - mask
 
-        total_tstp = self.predictor.n_timesteps
+        total_tstp = 10
         xt = torch.randn_like(masked_next_state)
         with torch.no_grad():
             for i in reversed(range(0, total_tstp)):
-                timesteps = torch.full((repeat*input_dim,), i, device=self.device, dtype=torch.long)
+                # timesteps = torch.full((repeat*input_dim,), i, device=self.device, dtype=torch.long)
+                timesteps = torch.full((repeat*input_dim,), self.predictor.ddim_timesteps_list[i], device=self.device, dtype=torch.long)
                 for k in reversed(range(reverse_step)):
                     # denoise "xt" for one diffusion timestep
                     xt_1_unkown = self.predictor.p_sample(xt, timesteps, action, states) * mask_reverse
@@ -752,7 +796,15 @@ class Diffusion_Predictor(object):
                         xt = xt_1_recon
                         break
         demasked_state = torch.mean(xt.reshape(repeat, input_dim,-1), dim=0).cpu().numpy()
-        return demasked_state
+
+        # demasked_state[:,:12] = self.reverse_min_max_norm(demasked_state[:,:12], -1, 5)
+        # demasked_state[:,12:] = self.reverse_min_max_norm(demasked_state[:,12:], 0, 30)
+
+        batch_size = demasked_state.shape[0]
+        state_dim = demasked_state.shape[1]
+        tmp = np.zeros((batch_size, 8 + state_dim))
+        tmp[:, 8:] = demasked_state
+        return tmp
 
     def save_model(self, file_name):
         logger.info('Saving models to {}'.format(file_name))

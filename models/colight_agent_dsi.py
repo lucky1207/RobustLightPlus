@@ -16,7 +16,7 @@ from tensorflow.keras.models import model_from_json, load_model
 from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.callbacks import EarlyStopping
 from utils.make_mask_noise import make_guassion_noise, make_U_rand_noise
-from inferences.rl_dynamic_state_filling import Diffusion_Predictor
+from inferences.state_filling import Diffusion_Predictor
 from utils.batch_buffer import ReplayBuffer
 import torch
 def build_memory():
@@ -36,7 +36,7 @@ class CoLightDSIAgent(Agent):
         self.len_feature = self._cal_len_feature()
         self.memory = build_memory()
         self.device = dic_traffic_env_conf['device']
-        self.inference_model = Diffusion_Predictor(self.len_feature, self.num_actions, self.device, dic_traffic_env_conf['inference_config'], log_writer=False)
+        self.inference_model = Diffusion_Predictor((self.len_feature-8), self.num_actions, self.device, dic_traffic_env_conf['inference_config'], log_writer=False)
      
         self.timestep = None
         self.long_state_con = torch.zeros([self.num_agents, 4, self.len_feature]).to(self.dic_traffic_env_conf['device'])
@@ -74,9 +74,10 @@ class CoLightDSIAgent(Agent):
         if self.dic_traffic_env_conf['is_test']:
             self.q_network_bar.load_weights(os.path.join(self.dic_traffic_env_conf['sota_path'], "round_{0}_inter_{1}.h5".format(cnt_round+79-4, self.intersection_id)), by_name=True)
             self.q_network.load_weights(os.path.join(self.dic_traffic_env_conf['sota_path'], "round_{0}_inter_{1}.h5".format(cnt_round+79, self.intersection_id)), by_name=True)
-            self.inference_model.load_model(os.path.join(self.dic_traffic_env_conf['sota_path'], "round_{0}_inter_0".format(cnt_round+79, self.intersection_id)),  int(self.device[-1]))
+            #self.inference_model.load_model(os.path.join(self.dic_traffic_env_conf['sota_path'], "round_{0}_inter_0".format(cnt_round+79, self.intersection_id)),  int(self.device[-1]))
             #self.inference_model.load_model(os.path.join('model/colightDSI_old/anon_3_4_jinan_real', "round_{0}_inter_0".format(cnt_round+79, self.intersection_id)),  int(self.device[-1]))
-
+            self.inference_model.load_model(self.dic_traffic_env_conf['diffusion_path'],  int(self.device[-1]))
+    
     def _cal_len_feature(self):
         N = 0
         used_feature = self.dic_traffic_env_conf["LIST_STATE_FEATURE"][:-1]

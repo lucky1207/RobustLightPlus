@@ -1,12 +1,12 @@
 # 忽略模型文件夹
 model/
-
+checkpoints/
 # 忽略记录文件夹
 records/
-
+logs/
 # 忽略 wandb 文件夹
 wandb/
-
+memory/
 # 忽略所有 .out 文件
 *.out
 summary/

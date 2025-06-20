@@ -136,7 +136,7 @@ class Diffusion(nn.Module):
         batch_size = shape[0]
         x = noised_next_state
 
-        for i in reversed(range(0, self.ddim_timesteps)):
+        for i in reversed(range(int(tstp/self.c))):
             timesteps = torch.full((batch_size,), self.ddim_timesteps_list[i], device=device, dtype=torch.long)
             x = self.p_sample(x, timesteps, action, state)
             #x = torch.clamp(x, min=-1, max=1)

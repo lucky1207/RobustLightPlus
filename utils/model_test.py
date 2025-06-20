@@ -219,7 +219,7 @@ def test(model_dir, cnt_round, run_cnt, _dic_traffic_env_conf):
             action = torch.tensor(np.eye(4)[np.array(action_list)]).to(dic_traffic_env_conf['device'])
             if dic_traffic_env_conf['NOISE_LEVEL'] == 0:
                 if dic_traffic_env_conf['NOISE_TYPE'] == 0:
-                    timestep = int((dic_traffic_env_conf['NOISE_SCALE'] + 0.02) / 0.04)
+                    timestep = int((dic_traffic_env_conf['NOISE_SCALE'] + 0.02) / 0.08)
                 elif dic_traffic_env_conf['NOISE_TYPE'] == 1:
                     timestep = int((dic_traffic_env_conf['NOISE_SCALE'] + 0.04) / 0.06)
 

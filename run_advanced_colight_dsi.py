@@ -80,7 +80,7 @@ def main(in_args=None):
             "MODEL_NAME": in_args.mod,
             "NUM_ROW": NUM_ROW,
             "NUM_COL": NUM_COL,
-            
+            'diffusion_path': '/data/myli/RobustLightPlus/checkpoints/diffusion/diffusion_model_final.pth',
             "TRAFFIC_FILE": traffic_file,
             "ROADNET_FILE": "roadnet_{0}.json".format(road_net),
             'is_test': True,
