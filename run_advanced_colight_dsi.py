@@ -22,8 +22,8 @@ def parse_args():
     parser.add_argument("-gen",        type=int,            default=1)
     parser.add_argument("-multi_process", action="store_true", default=True)
     parser.add_argument("-workers",    type=int,            default=3)
-    parser.add_argument("-hangzhou",    action="store_true", default=False)
-    parser.add_argument("-jinan",       action="store_true", default=True)
+    parser.add_argument("-hangzhou",    action="store_true", default=True)
+    parser.add_argument("-jinan",       action="store_true", default=False)
     parser.add_argument("-new_york",       action="store_true", default=False)
     return parser.parse_args()
 
@@ -33,16 +33,16 @@ def main(in_args=None):
         count = 3600
         road_net = "4_4"
         traffic_file_list = ["anon_4_4_hangzhou_real.json",
-                            #"anon_4_4_hangzhou_real_5816.json"
+                            "anon_4_4_hangzhou_real_5816.json"
                              ]
-        num_rounds = 80
+        num_rounds = 1
         template = "Hangzhou"
     elif in_args.jinan:
         count = 3600
         road_net = "3_4"
         traffic_file_list = ["anon_3_4_jinan_real.json", 
-                       #"anon_3_4_jinan_real_2000.json",
-                        #"anon_3_4_jinan_real_2500.json"
+                       "anon_3_4_jinan_real_2000.json",
+                        "anon_3_4_jinan_real_2500.json"
                              ]
         num_rounds = 1
         template = "Jinan"
@@ -80,11 +80,11 @@ def main(in_args=None):
             "MODEL_NAME": in_args.mod,
             "NUM_ROW": NUM_ROW,
             "NUM_COL": NUM_COL,
-            'diffusion_path': '/data/myli/RobustLightPlus/checkpoints/diffusion/diffusion_model_final.pth',
+            'diffusion_path': '/data/myli/RobustLightPlus/checkpoints/diffusion/diffusion_model_meta_final.pth',
             "TRAFFIC_FILE": traffic_file,
             "ROADNET_FILE": "roadnet_{0}.json".format(road_net),
             'is_test': True,
-            "inference_epoch": 50,
+           #"inference_epoch": 50,
             'is_inference': True,
             "sota_path": 'model/colightDSI_old/' + traffic_file[:-5],
             "NOISE_SCALE": 3.5,

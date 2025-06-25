@@ -382,172 +382,6 @@ class TemporalUnet(nn.Module):
         return output
     
 
-
-class TemporalUnetCritic(nn.Module):
-    def __init__(self, state_dim, action_dim, device, cond_dim=8,
-                 embed_dim=256, dim_mults=(2, 4), attention=False):
-        super(TemporalUnet, self).__init__()
-        self.state_dim = state_dim
-        self.action_dim = action_dim
-        self.device = device
-        self.cond_dim = cond_dim
-        horizon = self.cond_dim
-        self.embed_dim = embed_dim
-
-        self.state_encoder = nn.Sequential(
-            nn.Linear(state_dim, 2 * embed_dim),
-            nn.Mish(),
-            nn.Linear(2 * embed_dim, embed_dim // 2)
-        )
-
-        self.action_encoder = nn.Sequential(
-            nn.Linear(action_dim, 2 * embed_dim),
-            nn.Mish(),
-            nn.Linear(2 * embed_dim, embed_dim // 2)
-        )
-
-        dims = [embed_dim, *map(lambda m: embed_dim * m, dim_mults)]
-        in_out = list(zip(dims[:-1], dims[1:]))
-        logger.info(f'Models Channel dimensions: {in_out}')
-
-        self.time_mlp = nn.Sequential(
-            SinusoidalPosEmb(embed_dim),
-            nn.Linear(embed_dim, embed_dim * 2),
-            nn.Mish(),
-            nn.Linear(embed_dim * 2, embed_dim),
-        )
-
-        time_dim = embed_dim
-        horizon_history = []
-        self.downs = nn.ModuleList([])
-        self.ups = nn.ModuleList([])
-        num_resolutions = len(in_out)
-
-        for ind, (dim_in, dim_out) in enumerate(in_out):
-            horizon_history.append(horizon)
-            is_last = ind >= (num_resolutions - 1)
-
-            self.downs.append(nn.ModuleList([
-                ResidualTemporalBlock(dim_in, dim_out, kernel_size=3, embed_dim=time_dim, horizon=horizon),
-                ResidualTemporalBlock(dim_out, dim_out, kernel_size=3, embed_dim=time_dim, horizon=horizon),
-                Residual(PreNorm(dim_out, LinearAttention(dim_out))) if attention else nn.Identity(),
-                Downsample1d(dim_out) if not is_last else nn.Identity()
-            ]))
-
-            if not is_last:
-                horizon = horizon // 2
-
-        mid_dim = dims[-1]
-        self.mid_block1 = ResidualTemporalBlock(mid_dim, mid_dim, embed_dim=time_dim, horizon=horizon)
-        self.mid_attn = Residual(PreNorm(mid_dim, LinearAttention(mid_dim))) if attention else nn.Identity()
-        self.mid_block2 = ResidualTemporalBlock(mid_dim, mid_dim, embed_dim=time_dim, horizon=horizon)
-
-        for ind, (dim_in, dim_out) in enumerate(reversed(in_out[1:])):
-            is_last = ind >= (num_resolutions - 1)
-
-            self.ups.append(nn.ModuleList([
-                ResidualTemporalBlock(dim_out * 2, dim_in, embed_dim=time_dim, horizon=horizon),
-                ResidualTemporalBlock(dim_in, dim_in, embed_dim=time_dim, horizon=horizon),
-                Residual(PreNorm(dim_in, LinearAttention(dim_in))) if attention else nn.Identity(),
-                Upsample1d(dim_in) if not is_last and horizon_history[-(ind + 1)] != horizon_history[-(ind + 2)]
-                else nn.Identity()
-            ]))
-
-            if not is_last:
-                horizon = horizon_history[-(ind + 2)]
-
-        self.final_conv = nn.Sequential(
-            Conv1dBlock(2 * embed_dim, 2 * embed_dim, kernel_size=3),
-            nn.Conv1d(2 * embed_dim, embed_dim // 4, 1),
-        )
-        if horizon % 2 != 0:
-            out_horizon = horizon + 1
-        else:
-            out_horizon =horizon
-        self.mid_layer = nn.Sequential(nn.Linear(out_horizon * embed_dim // 4 + (embed_dim * 3) // 2 + embed_dim, 512),
-                                       nn.Mish(),
-                                       nn.Linear(512, 512),
-                                       nn.Mish(),
-                                       nn.Linear(512, 512),
-                                       nn.Mish())
-
-        self.final_layer = torch.nn.Linear(512, self.state_dim)
-
-    def forward(self, x, time, action, state_condition, mask=None):
-        '''
-            x : [ batch x horizon x transition ]
-        '''
-        batch_size = x.shape[0]
-        horizon = state_condition.shape[1]
-
-        encoded_noised_state = self.state_encoder(x)
-        encoded_action = self.action_encoder(action)
-        encoded_state_conditions = self.state_encoder(state_condition)
-
-        noised_state_rpt = torch.repeat_interleave(encoded_noised_state.reshape(batch_size, 1, -1), repeats=horizon,
-                                                   dim=1)
-
-        x = torch.cat([noised_state_rpt, encoded_state_conditions], dim=2)
-
-
-        x = einops.rearrange(x, 'b h t -> b t h')
-
-        t = self.time_mlp(time)
-        h = []
-
-        for resnet, resnet2, attn, downsample in self.downs:
-            x = resnet(x, t)
-            x = resnet2(x, t)
-            x = attn(x)
-            h.append(x)
-            x = downsample(x)
-
-        x = self.mid_block1(x, t)
-        x = self.mid_attn(x)
-        x = self.mid_block2(x, t)
-
-        for resnet, resnet2, attn, upsample in self.ups:
-            x = torch.cat((x, h.pop()), dim=1)
-            x = resnet(x, t)
-            x = resnet2(x, t)
-            x = attn(x)
-            x = upsample(x)
-
-        x = self.final_conv(x)
-
-        x = einops.rearrange(x, 'b t h -> b h t')
-
-        info = x.reshape(batch_size, -1)
-        output = self.mid_layer(torch.cat([info, encoded_noised_state, encoded_action,
-                                           encoded_state_conditions[:, -1], t], dim=1))
-        output = self.final_layer(output)
-        return output
-
-
-class Critic(nn.Module):
-    def __init__(self, state_dim, action_dim, config, device):
-        super(Critic, self).__init__()
-
-        self.q1_model = TemporalUnet(state_dim=state_dim, action_dim=action_dim, device=device,
-                                  cond_dim=config['condition_length'], embed_dim=config['embed_dim']).to(device)
-        self.q2_model = TemporalUnet(state_dim=state_dim, action_dim=action_dim, device=device,
-                                  cond_dim=config['condition_length'], embed_dim=config['embed_dim']).to(device)
-        self.final_layer = nn.Linear(state_dim, 1)
-    
-
-    def forward(self, action, t, pre_state_condition, next_state):
-        q1 = self.final_layer(self.q1_model(next_state, t, action, pre_state_condition))
-        q2 = self.final_layer(self.q2_model(next_state, t, action, pre_state_condition))
-        return q1, q2
-
-    def q1(self, action, t, pre_state_condition, next_state):
-        q1 = self.final_layer(self.q1_model(next_state, t, action, pre_state_condition))
-        return q1
-
-    def q_min(self, action, t, pre_state_condition, next_state):
-        q1, q2 = self.forward(action, t, pre_state_condition, next_state)
-        return torch.min(q1, q2)
-
 def singleton(cls):
     instances = {}
 
@@ -780,18 +614,18 @@ class Diffusion_Predictor(object):
                 timesteps = torch.full((repeat*input_dim,), self.predictor.ddim_timesteps_list[i], device=self.device, dtype=torch.long)
                 for k in reversed(range(reverse_step)):
                     # denoise "xt" for one diffusion timestep
-                    xt_1_unkown = self.predictor.p_sample(xt, timesteps, action, states) * mask_reverse
+                    xt_1_unkown = self.ema_model.p_sample(xt, timesteps, action, states) * mask_reverse
 
                     if i != 0:
                         # TODO: Check the timestep here (Derive the equation)
                         # Adding noise directly from masked_next_state
-                        xt_1_known = self.predictor.q_sample(masked_next_state, timesteps - 1) * mask
+                        xt_1_known = self.ema_model.q_sample(masked_next_state, timesteps - 1) * mask
                         xt_1_recon = xt_1_unkown + xt_1_known
                     else:
                         xt_1_recon = xt_1_unkown + masked_next_state
 
                     if k != 0 and i != 0:
-                        xt = self.predictor.q_onestep_sample(xt_1_recon, timesteps - 1)
+                        xt = self.ema_model.q_onestep_sample(xt_1_recon, timesteps - 1)
                     else:
                         xt = xt_1_recon
                         break

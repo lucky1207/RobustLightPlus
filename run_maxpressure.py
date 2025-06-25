@@ -88,7 +88,7 @@ def main(in_args=None):
             "NUM_ROUNDS": num_rounds,
             'is_test': True,
             "log_writer": False,
-            "inference_epoch": 0,
+            #"inference_epoch": 0,
             'is_inference': False,
             "sota_path": 'model/MaxPressure/' + traffic_file[:-5],
             "NOISE_SCALE": 3.5,

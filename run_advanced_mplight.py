@@ -83,9 +83,9 @@ def main(in_args=None):
             "DIC_REWARD_INFO": {
                 "pressure": -0.25,
             },
-            'is_test': True,
+            'is_test': False,
             "log_writer": False,
-            "inference_epoch": 0,
+            #"inference_epoch": 0,
             'is_inference': False,
             "sota_path": 'model/advanced_mplight/' + traffic_file[:-5],
             "NOISE_SCALE": 3.5,

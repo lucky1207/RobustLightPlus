@@ -86,7 +86,7 @@ def main(in_args=None):
             "ROADNET_FILE": "roadnet_{0}.json".format(road_net),
             'is_test': True,
             "log_writer": log_writer,
-            "inference_epoch": 0,
+            #"inference_epoch": 0,
             'is_inference': False,
             "sota_path": 'model/Colight/' + traffic_file[:-5],
             "NOISE_SCALE": 4 ,

@@ -404,7 +404,7 @@ class CoLightDSIAgent(Agent):
         early_stopping = EarlyStopping(
             monitor='val_loss', patience=self.dic_agent_conf["PATIENCE"], verbose=0, mode='min')
         if self.dic_traffic_env_conf['is_test'] is not True:
-            self.inference_model.train(self.replay_buffer, self.dic_traffic_env_conf['inference_epoch'], self.replay_buffer.batch_sample, self.dic_traffic_env_conf['log_writer'])
+           #self.inference_model.train(self.replay_buffer, self.dic_traffic_env_conf['inference_epoch'], self.replay_buffer.batch_sample, self.dic_traffic_env_conf['log_writer'])
             self.q_network.fit(self.Xs, self.Y, batch_size=batch_size, epochs=epochs, shuffle=False,
                             verbose=2, validation_split=0.3, callbacks=[early_stopping])
 

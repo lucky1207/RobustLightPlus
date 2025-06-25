@@ -89,7 +89,7 @@ def main(in_args=None):
 
             'is_test': True,
             "log_writer": False,
-            "inference_epoch": 0,
+            #"inference_epoch": 0,
             'is_inference': False,
             "sota_path": 'model/mplight/' + traffic_file[:-5],
             "NOISE_SCALE": 3.5,

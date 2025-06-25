@@ -79,7 +79,7 @@ def main(in_args=None):
             "NUM_GENERATORS": in_args.gen,
             'is_test': True,
             "log_writer": False,
-            "inference_epoch": 0,
+            #"inference_epoch": 0,
             'is_inference': False,
             #"sota_path": 'model/AdvancedMaxPressure/' + traffic_file[:-5],
             "sota_path": 'model/AdvancedMaxPressure/anon_3_4_jinan_real',

@@ -193,7 +193,7 @@ class NetworkAgent(Agent):
         if self.dic_traffic_env_conf['is_test'] is not True:
             self.q_network.fit(self.Xs, self.Y, batch_size=batch_size, epochs=epochs, shuffle=False,
                             verbose=2, validation_split=0.3, callbacks=[early_stopping])
-            self.inference_model.train(self.replay_buffer, self.dic_traffic_env_conf['inference_epoch'], self.replay_buffer.batch_sample, self.dic_traffic_env_conf['log_writer'])
+            #self.inference_model.train(self.replay_buffer, self.dic_traffic_env_conf['inference_epoch'], self.replay_buffer.batch_sample, self.dic_traffic_env_conf['log_writer'])
         
 
 class Selector(Layer):

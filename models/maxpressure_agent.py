@@ -116,8 +116,8 @@ class MaxPressureAgent(Agent):
 
     def train_network(self):    
         if self.dic_traffic_env_conf['is_test'] is not True:
-            self.inference_model.train(self.replay_buffer, self.dic_traffic_env_conf['inference_epoch'], self.replay_buffer.batch_sample, self.dic_traffic_env_conf['log_writer'])
-    
+            #self.inference_model.train(self.replay_buffer, self.dic_traffic_env_conf['inference_epoch'], self.replay_buffer.batch_sample, self.dic_traffic_env_conf['log_writer'])
+            pass
     def convert_state_to_input(self, s):
         """
         s: [state1, state2, ..., staten]
