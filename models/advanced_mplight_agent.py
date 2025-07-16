@@ -132,27 +132,28 @@ class AdvancedMPLightAgent(NetworkAgent):
         state_input = [np.array(dic_state_feature_arrays[feature_name]) for feature_name in
                        used_feature]
 
-        q_values = self.q_network.predict(state_input)
+        q_values = self.q_network(state_input)
         if random.random() <= self.dic_agent_conf["EPSILON"]:
             action = np.random.randint(len(q_values[0]), size=len(q_values))
         else:
             action = np.argmax(q_values, axis=1)
         import time
         start_time = time.time()
+        ran = random.uniform(0, 1)
         if is_test:
             if self.dic_traffic_env_conf['NOISE_LEVEL'] == 0:   
                 if self.dic_traffic_env_conf['NOISE_TYPE'] == 2:
-                    timestep = int((self.dic_traffic_env_conf['NOISE_SCALE'] + 0.03) / 0.05 + 0.0001)
+                    timestep = int((self.dic_traffic_env_conf['NOISE_SCALE'] + 0.03) / 0.1 + 0.0001)
                     noise_rpt = self.num_agents
                     xs = self.convert_state_to_input(states)
-                    tmp_xs = np.concatenate([xs[1], xs[2]], axis=1)
+                    tmp_xs = np.concatenate([xs[0], xs[1], xs[2]], axis=1)
                     actions = []
                     state_real_tensor = torch.tensor(tmp_xs.reshape(1, self.num_agents, -1)).to(self.dic_traffic_env_conf['device'])
                     rpt_state = torch.repeat_interleave(state_real_tensor, repeats=noise_rpt, dim=0)
                     rpt_noised_state = rpt_state + (2 * self.dic_traffic_env_conf['NOISE_SCALE']  * torch.rand_like(rpt_state) - self.dic_traffic_env_conf['NOISE_SCALE'] )
                     rpt_long_state_con_array = []
-                    for k in range(self.num_agents):
-                        if self.dic_traffic_env_conf['is_inference']:
+                    if self.dic_traffic_env_conf['is_inference'] and ran < self.dic_traffic_env_conf['DETECT_RATE']:
+                        for k in range(self.num_agents):
                             cur_action = torch.tensor(np.eye(4)[np.array(action)]).to(self.dic_traffic_env_conf['device'])[k]
                             rpt_con_action = torch.repeat_interleave(cur_action.reshape(1, -1), repeats=noise_rpt, dim=0)
                             rpt_long_state_con = torch.repeat_interleave(self.long_state_con[k].reshape(1,self.long_state_con.shape[1], -1), repeats=noise_rpt, dim=0)
@@ -163,7 +164,7 @@ class AdvancedMPLightAgent(NetworkAgent):
                     rpt_state_phase = torch.repeat_interleave(state_phase, repeats=noise_rpt, dim=0)
                     x = torch.tensor(tmp_xs).to(self.dic_traffic_env_conf['device'])
                     for k in range(self.num_agents):
-                        rpt_noised_action = self.q_network([rpt_state_phase[:,k,:].cpu().numpy(),rpt_noised_state[:,k,:12].cpu().numpy(), rpt_noised_state[:,k,12:].cpu().numpy()])
+                        rpt_noised_action = self.q_network([rpt_state_phase[:,k,:].cpu().numpy(),rpt_noised_state[:,k,8:20].cpu().numpy(), rpt_noised_state[:,k,20:].cpu().numpy()])
                         # 输出action
                         tmp_action = np.argmax(rpt_noised_action, axis=1)
                         # 从重复的噪声中选择q最小的，索引，从tmp_action中根据索引找到action
@@ -172,24 +173,24 @@ class AdvancedMPLightAgent(NetworkAgent):
                             tmp_q.append(rpt_noised_action[j,tmp_action[j]].cpu().numpy().tolist())
                         idx = tmp_q.index(min(tmp_q))
                         actions.append(tmp_action[idx])
-                        if self.dic_traffic_env_conf['is_inference']:
+                        if self.dic_traffic_env_conf['is_inference'] and ran < self.dic_traffic_env_conf['DETECT_RATE']:
                             x[k] = rpt_long_state_con_array[k][idx]
-                    if self.dic_traffic_env_conf['is_inference']:
+                    if self.dic_traffic_env_conf['is_inference'] and ran < self.dic_traffic_env_conf['DETECT_RATE']:
                         self.long_state_con = torch.cat([self.long_state_con[:, 1:], x.view(self.long_state_con.shape[0],1,-1)], dim=1)
 
                     action = actions
                 if self.dic_traffic_env_conf['NOISE_TYPE'] == 3:
-                    timestep = int((self.dic_traffic_env_conf['NOISE_SCALE'] + 0.03) / 0.05 + 0.0001)
+                    timestep = int((self.dic_traffic_env_conf['NOISE_SCALE'] + 0.03) / 0.1 + 0.0001)
                     noise_rpt = self.num_agents
                     xs = self.convert_state_to_input(states)
                     actions = []
-                    tmp_xs = np.concatenate([xs[1], xs[2]], axis=1)
+                    tmp_xs = np.concatenate([xs[0], xs[1], xs[2]], axis=1)
                     state_real_tensor = torch.tensor(tmp_xs.reshape(1, self.num_agents, -1)).to(self.dic_traffic_env_conf['device'])
                     rpt_state = torch.repeat_interleave(state_real_tensor, repeats=noise_rpt, dim=0)
                     rpt_noised_state = rpt_state + (2 * self.dic_traffic_env_conf['NOISE_SCALE']  * torch.rand_like(rpt_state) - self.dic_traffic_env_conf['NOISE_SCALE'] )
                     rpt_long_state_con_array = []
                     for k in range(self.num_agents):
-                        if self.dic_traffic_env_conf['is_inference']:
+                        if self.dic_traffic_env_conf['is_inference'] and ran < self.dic_traffic_env_conf['DETECT_RATE']:
                             cur_action = torch.tensor(np.eye(4)[np.array(action)]).to(self.dic_traffic_env_conf['device'])[k]
                             rpt_con_action = torch.repeat_interleave(cur_action.reshape(1, -1), repeats=noise_rpt, dim=0)
                             rpt_long_state_con = torch.repeat_interleave(self.long_state_con[k].reshape(1,self.long_state_con.shape[1], -1), repeats=noise_rpt, dim=0)
@@ -202,8 +203,8 @@ class AdvancedMPLightAgent(NetworkAgent):
                     x = torch.tensor(tmp_xs).to(self.dic_traffic_env_conf['device'])
                     
                     for k in range(self.num_agents):
-                        rpt_noised_all_q = self.q_network([rpt_state_phase[:,k,:].cpu().numpy(),rpt_noised_state[:,k,:12].cpu().numpy(), rpt_noised_state[:,k,12:].cpu().numpy()])
-                        original_action_all_q = self.q_network([rpt_state_phase[:,k,:].cpu().numpy(), rpt_state[:,k,:12].cpu().numpy(), rpt_state[:,k,12:].cpu().numpy()])
+                        rpt_noised_all_q = self.q_network([rpt_state_phase[:,k,:].cpu().numpy(),rpt_noised_state[:,k,8:20].cpu().numpy(), rpt_noised_state[:,k,20:].cpu().numpy()])
+                        original_action_all_q = self.q_network([rpt_state_phase[:,k,:].cpu().numpy(), rpt_state[:,k,8:20].cpu().numpy(), rpt_state[:,k,20:].cpu().numpy()])
                         # 输出action
                         rpt_noised_action_q = rpt_noised_all_q
                         original_action_q = np.mean(original_action_all_q, axis=0)
@@ -212,9 +213,9 @@ class AdvancedMPLightAgent(NetworkAgent):
                         idx = np.argmax(difference)
                         action = np.argmax(rpt_noised_action_q[idx])
                         actions.append(action)
-                        if self.dic_traffic_env_conf['is_inference']:
+                        if self.dic_traffic_env_conf['is_inference'] and ran < self.dic_traffic_env_conf['DETECT_RATE']:
                             x[k] = rpt_long_state_con_array[k][idx]
-                    if self.dic_traffic_env_conf['is_inference']:
+                    if self.dic_traffic_env_conf['is_inference'] and ran < self.dic_traffic_env_conf['DETECT_RATE']:
                         self.long_state_con = torch.cat([self.long_state_con[:, 1:], x.view(self.long_state_con.shape[0],1,-1)], dim=1)
 
                     action = actions

@@ -175,6 +175,6 @@ if __name__ == "__main__":
     }
 
 
-    memo = "transfer"
+    memo = "Advanced_Maxpressure"  # Advanced_MPLight  MaxPressure  Colight   MPLight  Advanced_MaxPressure   Advanced_Colight
     summary_detail_RL(memo, copy.deepcopy(total_summary))
     #summary_detail_conventional(memo)

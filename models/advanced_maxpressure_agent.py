@@ -16,7 +16,7 @@ from tensorflow.keras.models import model_from_json, load_model
 from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.callbacks import EarlyStopping
 from utils.make_mask_noise import make_guassion_noise
-from inferences.rl_dynamic_state_filling import Diffusion_Predictor
+from inferences.state_filling import Diffusion_Predictor
 from utils.batch_buffer import ReplayBuffer
 import torch
 
@@ -64,13 +64,15 @@ class AdvancedMaxPressureAgent(Agent):
                 self.load_network("round_{0}_inter_{1}".format(cnt_round - 1, self.intersection_id))
             except:
                 print("fail to load network, current round: {0}".format(cnt_round))
-       
-        self.inference_model = Diffusion_Predictor(self.len_feature, self.phase_length, self.device, dic_traffic_env_conf['inference_config'], log_writer=False)
-        self.inference_model.load_model(os.path.join(self.dic_traffic_env_conf['sota_path'], "round_{0}_int".format(cnt_round+70, self.intersection_id)),  int(self.device[-1]))
+
+        if self.dic_traffic_env_conf['is_test']:
+            self.inference_model = Diffusion_Predictor(self.len_feature, self.phase_length, self.device, dic_traffic_env_conf['inference_config'], log_writer=False)
+            self.inference_model.load_model(self.dic_traffic_env_conf['diffusion_path'],  int(self.device[-1]))
 
     def _cal_len_feature(self):
         N = 0
-        used_feature = self.dic_traffic_env_conf["LIST_STATE_FEATURE"][:-1]
+        # used_feature = self.dic_traffic_env_conf["LIST_STATE_FEATURE"][:-1]
+        used_feature = self.dic_traffic_env_conf["LIST_STATE_FEATURE"]
         for feat_name in used_feature:
             if "cur_phase" in feat_name:
                 N += 8
@@ -85,7 +87,7 @@ class AdvancedMaxPressureAgent(Agent):
         to calcualte the pressure of each phase.
         """
 
-        used_feature = self.dic_traffic_env_conf["LIST_STATE_FEATURE"][:2]
+        used_feature = self.dic_traffic_env_conf["LIST_STATE_FEATURE"][1:]
 
         if state["cur_phase"][0] == -1:
             return self.action
@@ -158,7 +160,8 @@ class AdvancedMaxPressureAgent(Agent):
         s: [state1, state2, ..., staten]
         """
         # TODO
-        used_feature = self.dic_traffic_env_conf["LIST_STATE_FEATURE"][:-1]
+        # used_feature = self.dic_traffic_env_conf["LIST_STATE_FEATURE"][:-1]
+        used_feature = self.dic_traffic_env_conf["LIST_STATE_FEATURE"]
         feats0 = []
         for i in range(self.num_agents):
             tmp = []

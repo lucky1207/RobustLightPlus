@@ -16,15 +16,22 @@ np.random.seed(seed)
 random.seed(seed)
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--memo",       type=str,               default='no_Advanced_maxpressure_guassian_4')
+    parser.add_argument("--memo",       type=str,               default='Advanced_Maxpressure')
     parser.add_argument("-model",       type=str,               default="AdvancedMaxPressure")
     parser.add_argument("-eightphase", action="store_true",     default=False)
     parser.add_argument("-multi_process", action="store_true",  default=False)
     parser.add_argument("-workers",     type=int,               default=3)
     parser.add_argument("-gen",        type=int,            default=1)
-    parser.add_argument("-hangzhou",    action="store_true",    default=True)
-    parser.add_argument("-jinan",       action="store_true",    default=True)
-    parser.add_argument("-new_york",       action="store_true", default=True)
+    parser.add_argument("-hangzhou",    action="store_true",    default=False)
+    parser.add_argument("-jinan",       action="store_true",    default=False)
+    parser.add_argument("-new_york",       action="store_true", default=False)
+
+    parser.add_argument("-inference", action="store_true", default=False)
+    parser.add_argument("-traffic_file", type=str, default="anon_3_4_jinan_real")
+    parser.add_argument("-NOISE_SCALE", type=float, choices=[3.5, 4.0])
+    parser.add_argument("-NOISE_TYPE", type=int, choices=[-1, 0, 1, 2, 3])
+    parser.add_argument("-NOISE_LEVEL", type=int, choices=[-1, 0, 1])
+    parser.add_argument("-NOISE_DIRECTION", type=str, choices=["W", "W,E"])
     return parser.parse_args()
 
 
@@ -32,19 +39,21 @@ def main(in_args=None):
     if in_args.hangzhou:
         count = 3600
         road_net = "4_4"
-        traffic_file_list = ["anon_4_4_hangzhou_real.json",
-                             #"anon_4_4_hangzhou_real_5816.json"
-                             ]
-        num_rounds = 10
+        # traffic_file_list = ["anon_4_4_hangzhou_real.json",
+        #                      "anon_4_4_hangzhou_real_5816.json"
+        #                      ]
+        traffic_file_list = [f"{in_args.traffic_file}.json"]
+        num_rounds = 3
         template = "Hangzhou"
     elif in_args.jinan:
         count = 3600
         road_net = "3_4"
-        traffic_file_list = ["anon_3_4_jinan_real.json", 
-                          #"anon_3_4_jinan_real_2000.json",
-                            #"anon_3_4_jinan_real_2500.json"
-                             ]
-        num_rounds = 10
+        # traffic_file_list = ["anon_3_4_jinan_real.json",
+        #                   "anon_3_4_jinan_real_2000.json",
+        #                     "anon_3_4_jinan_real_2500.json"
+        #                      ]
+        traffic_file_list = [f"{in_args.traffic_file}.json"]
+        num_rounds = 3
         template = "Jinan"
     elif in_args.new_york:
         count = 3600    
@@ -72,35 +81,35 @@ def main(in_args=None):
             "RUN_COUNTS": count,
             "NUM_ROW": NUM_ROW,
             "NUM_COL": NUM_COL,
-
+            'diffusion_path': f'./checkpoints/unet_ad/{in_args.traffic_file}/diffusion_model_meta_final.pth',
             "TRAFFIC_FILE": traffic_file,
             "ROADNET_FILE": "roadnet_{0}.json".format(road_net),
-
+            "log_writer": False,
             "NUM_GENERATORS": in_args.gen,
             'is_test': True,
-            "log_writer": False,
             #"inference_epoch": 0,
-            'is_inference': False,
-            #"sota_path": 'model/AdvancedMaxPressure/' + traffic_file[:-5],
-            "sota_path": 'model/AdvancedMaxPressure/anon_3_4_jinan_real',
-            "NOISE_SCALE": 4,
-            "NOISE_TYPE": 0, # 每一个level有不同类型的noise，譬如level为0噪声类型有guassion，qmin，uniform，action_diff
-            "NOISE_LEVEL": 0, # 0为state上面加噪声，1是mask， 2是 mask掉其他交叉口的
-            "device":"cuda:3",
+            'is_inference': in_args.inference,
+            "sota_path": '../RobustLight/model/Advanced_MaxPressure/' + traffic_file[:-5],
+            # "sota_path": 'model/AdvancedMaxPressure/anon_3_4_jinan_real',
+            "NOISE_SCALE": in_args.NOISE_SCALE,
+            "DETECT_RATE": 2,
+            "NOISE_TYPE": in_args.NOISE_TYPE, # 每一个level有不同类型的noise，譬如level为0噪声类型有guassion，qmin，uniform，action_diff
+            "NOISE_LEVEL": in_args.NOISE_LEVEL, # 0为state上面加噪声，1是mask， 2是 mask掉其他交叉口的
+            "device":"cuda:4",
             "index_maps" : {
                 "W": [0, 1, 2],
                 "E": [3, 4, 5],
                 "N": [6, 7, 8],
                 "S": [9, 10, 11]
             },
-            "NOISE_DIRECTION": ["W"], # 某个方向出错了
+            "NOISE_DIRECTION": in_args.NOISE_DIRECTION.split(","), # 某个方向出错了
             "inference_config": DMBP_config,
 
 
             "LIST_STATE_FEATURE": [
+                "cur_phase",
                 "traffic_movement_pressure_queue_efficient",
                 "lane_enter_running_part",
-                "cur_phase",
             ],
 
             "DIC_REWARD_INFO": {
@@ -129,10 +138,15 @@ def main(in_args=None):
 
      
         dic_path_extra = {
-            "PATH_TO_MODEL": os.path.join("model", in_args.memo, traffic_file + "_" +
-                                          time.strftime('%m_%d_%H_%M_%S', time.localtime(time.time()))),
-            "PATH_TO_WORK_DIRECTORY": os.path.join("records", in_args.memo, traffic_file + "_" +
-                                                   time.strftime('%m_%d_%H_%M_%S', time.localtime(time.time()))),
+            # "PATH_TO_MODEL": os.path.join("model", in_args.memo, traffic_file + "_" +
+            #                               time.strftime('%m_%d_%H_%M_%S', time.localtime(time.time()))),
+            # "PATH_TO_WORK_DIRECTORY": os.path.join("records", in_args.memo, traffic_file + "_" +
+            #                                        time.strftime('%m_%d_%H_%M_%S', time.localtime(time.time()))),
+            "PATH_TO_MODEL": os.path.join("model", in_args.memo,
+                                          f'{in_args.traffic_file}_{in_args.inference}_{in_args.NOISE_SCALE}_{in_args.NOISE_TYPE}_{in_args.NOISE_LEVEL}_{in_args.NOISE_DIRECTION}.json_{time.strftime("%m_%d_%H_%M_%S", time.localtime(time.time()))}'),
+            "PATH_TO_WORK_DIRECTORY": os.path.join("records", in_args.memo,
+                                                   f'{in_args.traffic_file}_{in_args.inference}_{in_args.NOISE_SCALE}_{in_args.NOISE_TYPE}_{in_args.NOISE_LEVEL}_{in_args.NOISE_DIRECTION}.json_{time.strftime("%m_%d_%H_%M_%S", time.localtime(time.time()))}'),
+
             "PATH_TO_DATA": os.path.join("data", template, str(road_net))
         }
         deploy_dic_traffic_env_conf = merge(config.dic_traffic_env_conf, dic_traffic_env_conf_extra)

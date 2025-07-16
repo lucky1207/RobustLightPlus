@@ -59,12 +59,18 @@ def test(model_dir, cnt_round, run_cnt, _dic_traffic_env_conf):
     
     if dic_traffic_env_conf['MODEL_NAME'] in ["EfficientColight", "AdvancedColight", "ColightDSI"]:
         long_state_con = torch.zeros([xs[0][0].shape[0], 4, agents[i].len_feature]).to(dic_traffic_env_conf['device'])
+        original_state = np.zeros(
+            (int(total_time / dic_traffic_env_conf["MIN_ACTION_TIME"]), xs[0].shape[1], xs[0].shape[2]))
     elif dic_traffic_env_conf['MODEL_NAME'] in ["AdvancedMaxPressure", "MaxPressure"]:
         long_state_con = torch.zeros([xs[0].shape[0], 4, agents[i].len_feature]).to(dic_traffic_env_conf['device'])
+        original_state = np.zeros(
+            (int(total_time / dic_traffic_env_conf["MIN_ACTION_TIME"]), xs[0].shape[0], xs[0].shape[1]))
     elif dic_traffic_env_conf['MODEL_NAME'] in ["EfficientMPLight", "AdvancedMPLight"]:
         long_state_con = torch.zeros([xs[1].shape[0], 4, agents[i].len_feature]).to(dic_traffic_env_conf['device'])
+        original_state = np.zeros(
+            (int(total_time / dic_traffic_env_conf["MIN_ACTION_TIME"]), xs[0].shape[0], xs[0].shape[1]))
     psnr = PSNR(255.0).to(dic_traffic_env_conf['device'])  
-    original_state = np.zeros((int(total_time / dic_traffic_env_conf["MIN_ACTION_TIME"]), xs[0].shape[1], xs[0].shape[2]))
+    # original_state = np.zeros((int(total_time / dic_traffic_env_conf["MIN_ACTION_TIME"]), xs[0].shape[1], xs[0].shape[2]))
     diffusion_denoise_state = original_state.copy()
     cnt = 0
     while not done and step_num < int(total_time / dic_traffic_env_conf["MIN_ACTION_TIME"]):
@@ -101,9 +107,10 @@ def test(model_dir, cnt_round, run_cnt, _dic_traffic_env_conf):
             elif dic_traffic_env_conf['MODEL_NAME'] in ["AdvancedMaxPressure","MaxPressure"]:
                 x=torch.tensor(xs[0]).to(dic_traffic_env_conf['device'])
             elif dic_traffic_env_conf['MODEL_NAME'] in ["EfficientMPLight"]:
-                x=torch.tensor(xs[1]).to(dic_traffic_env_conf['device'])
+                tmp_xs = np.concatenate([xs[0], xs[1]], axis=1)
+                x=torch.tensor(tmp_xs).to(dic_traffic_env_conf['device'])
             elif dic_traffic_env_conf['MODEL_NAME'] in ["AdvancedMPLight"]:
-                tmp_xs = np.concatenate([xs[1], xs[2]], axis=1)
+                tmp_xs = np.concatenate([xs[0], xs[1], xs[2]], axis=1)
                 x=torch.tensor(tmp_xs).to(dic_traffic_env_conf['device'])
             
                
@@ -140,8 +147,8 @@ def test(model_dir, cnt_round, run_cnt, _dic_traffic_env_conf):
                 mask_dim = []
                 for dire in dic_traffic_env_conf['NOISE_DIRECTION']:
                     mask_dim.extend(dic_traffic_env_conf['index_maps'][dire])
-                mask_dim_queue_length = [i for i in mask_dim]
-                mask_dim_running_length = [i+12 for i in mask_dim ]
+                mask_dim_queue_length = [i+8 for i in mask_dim]
+                mask_dim_running_length = [i+20 for i in mask_dim ]
                 mask[:, mask_dim_queue_length] = 0
                 mask[:, mask_dim_running_length] = 0
                 mask_tensor = torch.FloatTensor(mask).to(dic_traffic_env_conf['device']).type(torch.float32)
@@ -154,23 +161,24 @@ def test(model_dir, cnt_round, run_cnt, _dic_traffic_env_conf):
                 mask_dim = []
                 for dire in dic_traffic_env_conf['NOISE_DIRECTION']:
                     mask_dim.extend(dic_traffic_env_conf['index_maps'][dire])
-                mask_dim_queue_length = [i for i in mask_dim]
+                mask_dim_queue_length = [i+8 for i in mask_dim]
                 mask[:, mask_dim_queue_length] = 0
                 mask_tensor = torch.FloatTensor(mask).to(dic_traffic_env_conf['device']).type(torch.float32)
                 xs[0] = mask * xs[0]
                 x=torch.tensor(xs[0]).to(dic_traffic_env_conf['device'])
             elif dic_traffic_env_conf['MODEL_NAME'] in ["EfficientMPLight"]:
                 xs = agents[i].convert_state_to_input(next_state)
-                mask = np.ones(xs[1].shape)
+                tmp_xs = np.concatenate([xs[0], xs[1]], axis=1)
+                mask = np.ones((agents[i].num_agents, 20))
                 # 某个方向上的传感器坏了,一共四个方向
                 mask_dim = []
                 for dire in dic_traffic_env_conf['NOISE_DIRECTION']:
                     mask_dim.extend(dic_traffic_env_conf['index_maps'][dire])
-                mask_dim_queue_length = [i for i in mask_dim]
+                mask_dim_queue_length = [i+8 for i in mask_dim]
                 mask[:, mask_dim_queue_length] = 0
                 mask_tensor = torch.FloatTensor(mask).to(dic_traffic_env_conf['device']).type(torch.float32)
-                xs[1] = mask * xs[1]
-                x=torch.tensor(xs[1]).to(dic_traffic_env_conf['device'])
+                tmp_xs = mask * tmp_xs
+                x=torch.tensor(tmp_xs).to(dic_traffic_env_conf['device'])
             elif dic_traffic_env_conf['MODEL_NAME'] in ["EfficientColight"]:
                 xs = agents[i].convert_state_to_input(next_state)
                 mask = np.ones(xs[0][0].shape)
@@ -185,14 +193,14 @@ def test(model_dir, cnt_round, run_cnt, _dic_traffic_env_conf):
                 x=torch.tensor(xs[0][0]).to(dic_traffic_env_conf['device'])
             elif dic_traffic_env_conf['MODEL_NAME'] in ["AdvancedMPLight"]:
                 xs = agents[i].convert_state_to_input(next_state)
-                tmp_xs = np.concatenate([xs[1], xs[2]], axis=1)
-                mask = np.ones((agents[i].num_agents, 24))
+                tmp_xs = np.concatenate([xs[0], xs[1], xs[2]], axis=1)
+                mask = np.ones((agents[i].num_agents, 32))
                 # 某个方向上的传感器坏了,一共四个方向
                 mask_dim = []
                 for dire in dic_traffic_env_conf['NOISE_DIRECTION']:
                     mask_dim.extend(dic_traffic_env_conf['index_maps'][dire])
-                mask_dim_queue_length = [i for i in mask_dim]
-                mask_dim_running_length = [i+12 for i in mask_dim ]
+                mask_dim_queue_length = [i+8 for i in mask_dim]
+                mask_dim_running_length = [i+20 for i in mask_dim ]
                 mask[:, mask_dim_queue_length] = 0
                 mask[:, mask_dim_running_length] = 0
                 mask_tensor = torch.FloatTensor(mask).to(dic_traffic_env_conf['device']).type(torch.float32)
@@ -210,9 +218,10 @@ def test(model_dir, cnt_round, run_cnt, _dic_traffic_env_conf):
             elif dic_traffic_env_conf['MODEL_NAME'] in ["AdvancedMaxPressure", "MaxPressure"]:
                 x_recover=torch.tensor(xs_recover[0]).to(dic_traffic_env_conf['device'])
             elif dic_traffic_env_conf['MODEL_NAME'] in ["EfficientMPLight"]:
-                x_recover=torch.tensor(xs_recover[1]).to(dic_traffic_env_conf['device'])
+                tmp_xs = np.concatenate([xs_recover[0], xs_recover[1]], axis=1)
+                x_recover=torch.tensor(tmp_xs).to(dic_traffic_env_conf['device'])
             elif dic_traffic_env_conf['MODEL_NAME'] in ["AdvancedMPLight"]:
-                tmp_xs = np.concatenate([xs_recover[1], xs_recover[2]], axis=1)
+                tmp_xs = np.concatenate([xs_recover[0], xs_recover[1], xs_recover[2]], axis=1)
                 x_recover=torch.tensor(tmp_xs).to(dic_traffic_env_conf['device'])
 
             long_state_con = torch.cat([long_state_con[:, 1:], x_recover.view(long_state_con.shape[0],1,-1)], dim=1)
@@ -232,7 +241,7 @@ def test(model_dir, cnt_round, run_cnt, _dic_traffic_env_conf):
                 elif dic_traffic_env_conf['MODEL_NAME'] in ["AdvancedMaxPressure", "MaxPressure"]:
                     xs[0] = agents[i].inference_model.denoise_state(x.type(torch.float32), action.type(torch.float32), long_state_con.type(torch.float32), timestep, method="mean").cpu()
                 elif dic_traffic_env_conf['MODEL_NAME'] in ["EfficientMPLight"]:
-                    xs[1] = agents[i].inference_model.denoise_state(x.type(torch.float32), action.type(torch.float32), long_state_con.type(torch.float32), timestep, method="mean").cpu()
+                    tmp_xs = agents[i].inference_model.denoise_state(x.type(torch.float32), action.type(torch.float32), long_state_con.type(torch.float32), timestep, method="mean").cpu()
                 elif dic_traffic_env_conf['MODEL_NAME'] in ["AdvancedMPLight"]:
                     tmp_xs = agents[i].inference_model.denoise_state(x.type(torch.float32), action.type(torch.float32), long_state_con.type(torch.float32), timestep, method="mean").cpu()
                 
@@ -242,7 +251,7 @@ def test(model_dir, cnt_round, run_cnt, _dic_traffic_env_conf):
                 elif dic_traffic_env_conf['MODEL_NAME'] in ["AdvancedMaxPressure", "MaxPressure"]:
                     xs[0]= agents[i].inference_model.demask_state(x.type(torch.float32), action.type(torch.float32), long_state_con.type(torch.float32), mask_tensor,2)
                 elif dic_traffic_env_conf['MODEL_NAME'] in ["EfficientMPLight"]:
-                    xs[1]= agents[i].inference_model.demask_state(x.type(torch.float32), action.type(torch.float32), long_state_con.type(torch.float32), mask_tensor,2)
+                    tmp_xs= agents[i].inference_model.demask_state(x.type(torch.float32), action.type(torch.float32), long_state_con.type(torch.float32), mask_tensor,2)
                 elif dic_traffic_env_conf['MODEL_NAME'] in ["AdvancedMPLight"]:
                     tmp_xs = agents[i].inference_model.demask_state(x.type(torch.float32), action.type(torch.float32), long_state_con.type(torch.float32), mask_tensor,2)
         end_time = time.time()
@@ -251,7 +260,8 @@ def test(model_dir, cnt_round, run_cnt, _dic_traffic_env_conf):
         #print(f"Inference time: {elapsed_time_ms:.2f} ms") 
         # 为feature赋值
         used_feature = dic_traffic_env_conf["LIST_STATE_FEATURE"]
-        if dic_traffic_env_conf['is_inference']  and step_num >= 4 and dic_traffic_env_conf['NOISE_TYPE'] != 2 and dic_traffic_env_conf['NOISE_TYPE'] != 3:
+        # if dic_traffic_env_conf['is_inference']  and step_num >= 4 and dic_traffic_env_conf['NOISE_TYPE'] != 2 and dic_traffic_env_conf['NOISE_TYPE'] != 3:
+        if step_num >= 4 and dic_traffic_env_conf['NOISE_TYPE'] != 2 and dic_traffic_env_conf['NOISE_TYPE'] != 3:
             t = 0
             for s in next_state:
                 for feature in used_feature:
@@ -261,24 +271,24 @@ def test(model_dir, cnt_round, run_cnt, _dic_traffic_env_conf):
                         if dic_traffic_env_conf['MODEL_NAME'] in ["EfficientColight", "AdvancedColight", "ColightDSI"]:
                             s[feature] = xs[0][0][t,8:20].tolist()
                         elif dic_traffic_env_conf['MODEL_NAME'] in ["AdvancedMaxPressure"]:
-                            s[feature] = xs[0][t,0:12].tolist()
+                            s[feature] = xs[0][t,8:20].tolist()
                         elif dic_traffic_env_conf['MODEL_NAME'] in ["AdvancedMPLight"]:
-                            s[feature] = tmp_xs[t,0:12].tolist()   
+                            s[feature] = tmp_xs[t,8:20].tolist()
 
                     elif feature == "lane_enter_running_part":
                         if dic_traffic_env_conf['MODEL_NAME'] in ["EfficientColight", "AdvancedColight", "ColightDSI"]:
                             s[feature] = xs[0][0][t,20:].tolist()
                         elif dic_traffic_env_conf['MODEL_NAME'] in ["AdvancedMaxPressure"]:
-                            s[feature] = xs[0][t,12:].tolist()
+                            s[feature] = xs[0][t,20:].tolist()
                         elif dic_traffic_env_conf['MODEL_NAME'] in ["AdvancedMPLight"]:
-                            s[feature] = tmp_xs[t,12:].tolist()   
+                            s[feature] = tmp_xs[t,20:].tolist()
 
                     elif feature == 'traffic_movement_pressure_num':
-                        s[feature] = xs[1][t,:].tolist()
+                        s[feature] = tmp_xs[t,8:].tolist()
                     elif feature == 'lane_num_vehicle':
                         s[feature] = xs[0][0][t,8:20].tolist()
                     elif feature == 'traffic_movement_pressure_queue':
-                        s[feature] = xs[0][t,:].tolist()
+                        s[feature] = xs[0][t,8:].tolist()
                         
                 t += 1
                 
@@ -290,8 +300,8 @@ def test(model_dir, cnt_round, run_cnt, _dic_traffic_env_conf):
     psnr_value = psnr(postprocess(original_state), \
                         postprocess(diffusion_denoise_state))
     mae = (torch.sum(torch.abs(original_state - diffusion_denoise_state)) / torch.sum(original_state)).float()
-    print(f'psnr {psnr_value.item()}')
-    print(f'mae {mae}')
+    # print(f'psnr {psnr_value.item()}')
+    # print(f'mae {mae}')
     env.batch_log_2()
     env.end_cityflow()
     

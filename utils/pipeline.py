@@ -160,12 +160,12 @@ class Pipeline:
                 update_network_total_time = update_network_end_time - update_network_start_time
 
             print("==============  test evaluation =============")
-            #test_evaluation_start_time = time.time()
+            test_evaluation_start_time = time.time()
             model_test.test(self.dic_path["PATH_TO_MODEL"], cnt_round,
                             self.dic_traffic_env_conf["RUN_COUNTS"], self.dic_traffic_env_conf)
 
-            # test_evaluation_end_time = time.time()
-            # test_evaluation_total_time = test_evaluation_end_time - test_evaluation_start_time
+            test_evaluation_end_time = time.time()
+            test_evaluation_total_time = test_evaluation_end_time - test_evaluation_start_time
 
             # print("Generator time: ", generator_total_time)
             # print("Making samples time:", making_samples_total_time)
@@ -178,3 +178,8 @@ class Pipeline:
             #                                                 update_network_total_time, test_evaluation_total_time,
             #                                                 time.time()-round_start_time))
             # f_time.close()
+
+            # 保存 test_evaluation_total_time 到文件，每行一个数值
+            with open(os.path.join(self.dic_path["PATH_TO_WORK_DIRECTORY"], "running_time.csv"), "a") as f_time:
+                f_time.write(f"{test_evaluation_total_time}\n")
+                f_time.close()
