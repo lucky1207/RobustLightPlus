@@ -36,8 +36,9 @@ class CoLightDSIAgent(Agent):
         self.len_feature = self._cal_len_feature()
         self.memory = build_memory()
         self.device = dic_traffic_env_conf['device']
-        self.inference_model = Diffusion_Predictor((self.len_feature-8), self.num_actions, self.device, dic_traffic_env_conf['inference_config'], log_writer=False)
-     
+        # self.inference_model = Diffusion_Predictor((self.len_feature-8), self.num_actions, self.device, dic_traffic_env_conf['inference_config'], log_writer=False)
+        self.inference_model = Diffusion_Predictor((self.len_feature), self.num_actions, self.device, dic_traffic_env_conf['inference_config'], log_writer=False)
+
         self.timestep = None
         self.long_state_con = torch.zeros([self.num_agents, 4, self.len_feature]).to(self.dic_traffic_env_conf['device'])
         if cnt_round == 0:
@@ -218,7 +219,7 @@ class CoLightDSIAgent(Agent):
         if is_test:
             if self.dic_traffic_env_conf['NOISE_LEVEL'] == 0:   
                 if self.dic_traffic_env_conf['NOISE_TYPE'] == 2:
-                    timestep = int((self.dic_traffic_env_conf['NOISE_SCALE'] + 0.03) / 0.05 + 0.0001)
+                    timestep = int((self.dic_traffic_env_conf['NOISE_SCALE'] + 0.03) / 0.1 + 0.0001)   # 0.05
                     noise_rpt = self.num_agents
                     xs = self.convert_state_to_input(states)
                     actions = []
@@ -254,7 +255,7 @@ class CoLightDSIAgent(Agent):
 
                     action = actions
                 if self.dic_traffic_env_conf['NOISE_TYPE'] == 3:
-                    timestep = int((self.dic_traffic_env_conf['NOISE_SCALE'] + 0.03) / 0.05 + 0.0001)
+                    timestep = int((self.dic_traffic_env_conf['NOISE_SCALE'] + 0.03) / 0.1 + 0.0001)       # 0.05
                     noise_rpt = self.num_agents
                     xs = self.convert_state_to_input(states)
                     actions = []

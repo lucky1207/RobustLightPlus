@@ -7,7 +7,7 @@ Action: use greedy method select the phase with max value.
 from .agent import Agent
 
 import numpy as np
-from inferences.rl_dynamic_state_filling import Diffusion_Predictor
+from inferences.state_filling import Diffusion_Predictor
 from utils.batch_buffer import ReplayBuffer
 import os 
 
@@ -56,7 +56,7 @@ class MaxPressureAgent(Agent):
 
     def _cal_len_feature(self):
         N = 0
-        used_feature = self.dic_traffic_env_conf["LIST_STATE_FEATURE"][:-1]
+        used_feature = self.dic_traffic_env_conf["LIST_STATE_FEATURE"]
         for feat_name in used_feature:
             if "cur_phase" in feat_name:
                 N += 8
@@ -123,7 +123,7 @@ class MaxPressureAgent(Agent):
         s: [state1, state2, ..., staten]
         """
         # TODO
-        used_feature = self.dic_traffic_env_conf["LIST_STATE_FEATURE"][:-1]
+        used_feature = self.dic_traffic_env_conf["LIST_STATE_FEATURE"]
         feats0 = []
         for i in range(self.num_agents):
             tmp = []

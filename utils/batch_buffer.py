@@ -19,7 +19,7 @@ class ReplayBuffer:
         s, a, ns, r = memory
         self.trajectory_len = trajectory_len
         self.batch = int(s.shape[1]/trajectory_len) * s.shape[0]
-        self.batch_sample = 64 if self.batch > 64 else self.batch
+        self.batch_sample = 16 if self.batch > 16 else self.batch       # 64
         self.states = np.zeros(shape=(self.batch, trajectory_len, s.shape[2]))
         self.actions = np.zeros(shape=(self.batch, trajectory_len, a.shape[2]))
         self.next_states = np.zeros(shape=(self.batch, trajectory_len, ns.shape[2]))

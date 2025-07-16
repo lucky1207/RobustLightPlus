@@ -57,7 +57,7 @@ def load_memory_data(memory_path):
 def setup_device():
     """设置设备"""
     if torch.cuda.is_available():
-        device = torch.device("cuda")
+        device = torch.device("cuda:4")
         logger.info(f"使用GPU: {torch.cuda.get_device_name()}")
     else:
         device = torch.device("cpu")
@@ -82,19 +82,33 @@ def setup_wandb(config, project_name="RobustLightPlus-Diffusion"):
 
 def process_feature(states, list_feature):
     fe_len = len(states[list_feature[0]])
-    s = np.zeros(shape=(240, int(fe_len/240), 24))
-    for i in range(len(list_feature)):
-        tmp_arr = np.array(states[list_feature[i]]).reshape(240, int(fe_len/240), 12)
-        s[:,:,i*12:(i+1)*12] = tmp_arr
+    s = np.zeros(shape=(240, int(fe_len/240), 32))
+    # for i in range(len(list_feature)):
+    #     tmp_arr = np.array(states[list_feature[i]]).reshape(240, int(fe_len/240), 12)
+    #     s[:,:,i*12:(i+1)*12] = tmp_arr
+    s[:, :, :8] = np.array(states[list_feature[0]]).reshape(240, int(fe_len/240), 8)
+    s[:, :, 8:20] = np.array(states[list_feature[1]]).reshape(240, int(fe_len/240), 12)
+    s[:, :, 20:32] = np.array(states[list_feature[2]]).reshape(240, int(fe_len/240), 12)
     return s
 
 def create_replay_buffer(memory_data, device):
     """根据memory原始数据创建ReplayBuffer（保持与旧流程一致）"""
     states, actions, next_states, pressure_rewards, q_length_rewards = memory_data
     list_feature = [
+        "new_phase",
         "traffic_movement_pressure_queue_efficient",
         "lane_run_in_part",
     ]
+
+    # list_feature = [
+    #     "new_phase",
+    #     "lane_num_vehicle_in",
+    # ]
+
+    # list_feature = [
+    #     "new_phase",
+    #     "traffic_movement_pressure_num",
+    # ]
     states = process_feature(states, list_feature)
     next_states = process_feature(next_states, list_feature)
 
@@ -145,8 +159,8 @@ def meta_train_diffusion(
     logger.info("Diffusion Predictor 初始化完成")
 
     # ==== 3. Meta 参数 ====
-    meta_iterations = 1000  # 外循环次数
-    inner_steps = 1  # 每个外任务的适应步数
+    meta_iterations = 25  # 外循环次数
+    inner_steps = 70  # 每个外任务的适应步数
     meta_lr = 0.1
 
     use_wandb = setup_wandb(config, project_name="RobustLightPlus-Diffusion-Meta")
@@ -184,18 +198,23 @@ def meta_train_diffusion(
         # 在 inner task 上做一次训练 / 评估
         metric = diffusion_predictor.train(
             replay_buffer=inner_buffer,
-            iterations=1,
+            iterations=70,
             batch_size=config["batch_size"],
             log_writer=use_wandb,
         )
 
-        if use_wandb and (meta_step % 50 == 0):
+        if meta_step % 20 == 0 and meta_step > 0:
+            save_path = os.path.join(output_dir, f"diffusion_model_meta_step_{meta_step}.pth")
+            diffusion_predictor.save_model(save_path)
+            logger.info(f"Meta 训练中途保存模型: {save_path}")
+
+        if use_wandb and (meta_step % 10 == 0):
             wandb.log({
                 "Meta/Step": meta_step,
                 "Meta/Inner_Loss": metric["pred_loss"][-1] if metric["pred_loss"] else 0,
             })
 
-        if meta_step % 100 == 0:
+        if meta_step % 10 == 0:
             logger.info(f"[Meta-Step {meta_step}] Inner Loss: {metric['pred_loss'][-1] if metric['pred_loss'] else 0}")
 
     # ==== 4. 保存 Meta 训练模型 ====
@@ -232,23 +251,31 @@ def train_diffusion(
 
     use_wandb = setup_wandb(config)
 
-    max_timesteps = 5000
+    max_timesteps = 80
     batch_size = config["batch_size"]
 
     for step in tqdm(range(max_timesteps), desc="训练进度"):
         metric = diffusion_predictor.train(
             replay_buffer=replay_buffer,
-            iterations=1,
+            iterations=50,
             batch_size=batch_size,
             log_writer=use_wandb,
         )
 
-        if use_wandb and (step % 100 == 0):
+        if step % 10 == 0 and step > 0:
+            save_path = os.path.join(output_dir, f"diffusion_model_step_{step}.pth")
+            diffusion_predictor.save_model(save_path)
+            logger.info(f"Meta 训练中途保存模型: {save_path}")
+
+        if use_wandb and (step % 10 == 0):
             wandb.log({
                 "Training/Step": step,
                 "Training/Loss": metric["pred_loss"][-1] if metric["pred_loss"] else 0,
                 "Training/LR": diffusion_predictor.predictor_optimizer.param_groups[0]["lr"],
             })
+
+        if step % 10 == 0:
+            logger.info(f"[Step {step}] Inner Loss: {metric['pred_loss'][-1] if metric['pred_loss'] else 0}")
 
     final_path = os.path.join(output_dir, "diffusion_model_final.pth")
     diffusion_predictor.save_model(final_path)

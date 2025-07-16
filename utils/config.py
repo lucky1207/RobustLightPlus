@@ -147,7 +147,7 @@ DMBP_config = {
 
     "lr": 3e-4,
     "alpha": 0.2,
-    "batch_size": 64,
+    "batch_size": 16,       # 64
     "hidden_size": 256,
     "embed_dim": 64,
     "reward_tune": "no",

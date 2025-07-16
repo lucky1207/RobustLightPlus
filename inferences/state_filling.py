@@ -537,8 +537,8 @@ class Diffusion_Predictor(object):
                       non_smooth=None):
         # Core: Method 1 is to Average 50 results
         input_dim = noise_next_state.shape[0]
-        noise_next_state = noise_next_state[:,8:]
-        condition_states = condition_states[:,:,8:]
+        # noise_next_state = noise_next_state[:,8:]
+        # condition_states = condition_states[:,:,8:]
 
         # noise_next_state[:,:12] = self.min_max_norm(noise_next_state[:,:12], -1,5)
         # noise_next_state[:,12:] = self.min_max_norm(noise_next_state[:,12:], 0, 30)
@@ -583,18 +583,18 @@ class Diffusion_Predictor(object):
         # final_state[:,12:] = self.reverse_min_max_norm(final_state[:,12:], 0, 30)
 
 
-        batch_size = final_state.shape[0]
-        state_dim = final_state.shape[1]
-        tmp = torch.zeros((batch_size, 8 + state_dim), device=final_state.device, dtype=final_state.dtype)
-        tmp[:, 8:] = final_state
-        return tmp 
+        # batch_size = final_state.shape[0]
+        # state_dim = final_state.shape[1]
+        # tmp = torch.zeros((batch_size, 8 + state_dim), device=final_state.device, dtype=final_state.dtype)
+        # tmp[:, 8:] = final_state
+        return final_state
 
     def demask_state(self, masked_next_state, action, states, mask, reverse_step=2):
         repeat = 50
         input_dim = action.shape[0]
-        masked_next_state = masked_next_state[:,8:]
-        states = states[:,:,8:]
-        mask = mask[:,8:]
+        # masked_next_state = masked_next_state[:,8:]
+        # states = states[:,:,8:]
+        # mask = mask[:,8:]
 
 
         # states[:,:12] = self.min_max_norm(states[:,0:12], -1,5)
@@ -634,11 +634,11 @@ class Diffusion_Predictor(object):
         # demasked_state[:,:12] = self.reverse_min_max_norm(demasked_state[:,:12], -1, 5)
         # demasked_state[:,12:] = self.reverse_min_max_norm(demasked_state[:,12:], 0, 30)
 
-        batch_size = demasked_state.shape[0]
-        state_dim = demasked_state.shape[1]
-        tmp = np.zeros((batch_size, 8 + state_dim))
-        tmp[:, 8:] = demasked_state
-        return tmp
+        # batch_size = demasked_state.shape[0]
+        # state_dim = demasked_state.shape[1]
+        # tmp = np.zeros((batch_size, 8 + state_dim))
+        # tmp[:, 8:] = demasked_state
+        return demasked_state
 
     def save_model(self, file_name):
         logger.info('Saving models to {}'.format(file_name))
@@ -655,8 +655,8 @@ class Diffusion_Predictor(object):
         logger.info(f'Loading models from {file_name}')
         if file_name is not None:
             checkpoint = torch.load(file_name, map_location=f'cuda:{device_idx}')
-            self.predictor.load_state_dict(checkpoint['actor_state_dict'])
-            self.ema_model.load_state_dict(checkpoint['ema_state_dict'])
+            self.predictor.load_state_dict(checkpoint['actor_state_dict'], strict=False)
+            self.ema_model.load_state_dict(checkpoint['ema_state_dict'], strict=False)
             self.predictor_optimizer.load_state_dict(checkpoint['actor_optimizer_state_dict'])
 
     def load_checkpoint(self, file_name, device_idx=0):
